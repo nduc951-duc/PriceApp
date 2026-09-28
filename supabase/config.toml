@@ -1,0 +1,7 @@
+project_id = "gia-chuan"
+[api]
+enabled = true
+[db]
+major_version = 17
+[storage]
+enabled = true

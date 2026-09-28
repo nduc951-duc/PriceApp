@@ -1,0 +1,1 @@
+import {describe,expect,it} from "vitest";import {priceSchema} from "./validation";describe("price validation",()=>{it.each([-1,NaN,"abc"])("rejects %s",x=>expect(priceSchema.safeParse(x).success).toBe(false));it("accepts zero",()=>expect(priceSchema.safeParse(0).success).toBe(true));});

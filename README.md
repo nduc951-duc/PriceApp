@@ -1,36 +1,24 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Giá Chuẩn
 
-## Getting Started
+PWA mobile-first tra cứu và cập nhật giá vật tư. Search hoàn toàn deterministic; không dùng AI để suy giá.
 
-First, run the development server:
+## Chạy app
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Yêu cầu Node.js 20+. Chạy `npm install`, sao chép `.env.example` thành `.env.local`, điền Supabase URL/publishable key, sau đó `npm run dev`. Không commit `.env.local`.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Kiểm tra: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`; E2E dùng `npx playwright install chromium` rồi `npm run test:e2e`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase cloud
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Tạo project mới tại Singapore, lưu database password trong password manager.
+2. Cách không cần CLI: mở SQL Editor và chạy lần lượt các file trong `supabase/migrations` theo tên tăng dần, sau đó chạy `supabase/seed.sql` nếu cần demo.
+3. Cách dùng CLI: `npx supabase link --project-ref <ref>` rồi `npx supabase db push`; chạy seed có nhãn SAMPLE khi cần.
+4. Trong Authentication, tạo user email/mật khẩu. Thêm profile owner bằng SQL Editor: `insert into public.profiles(id, display_name, role) select id, email, 'owner' from auth.users where email='<email-cua-ban>';`.
+5. Trong Project Settings > API, sao chép Project URL và Publishable key vào `.env.local`. Publishable key có thể dùng ở browser; tuyệt đối không dùng secret/service-role key.
+4. Bucket `source-pages` do migration tạo là private. Chỉ backend được tạo signed URL ngắn hạn.
 
-## Learn More
+## Vận hành
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Deploy Vercel: import repo, khai báo hai biến trong `.env.example`, chạy build mặc định.
+- Backup: bật Supabase backups hoặc `npx supabase db dump -f backup.sql`; restore vào project trống rồi chạy migration.
+- Dữ liệu thật: upload ảnh vào bucket private, tạo `source_pages`, tách từng variant, giữ `raw_specification`, chỉ chuyển sang `verified` sau khi đối chiếu.
