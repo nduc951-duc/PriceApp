@@ -49,6 +49,15 @@ describe("request authentication", () => {
     await app.close();
   });
 
+  it("returns 503 when Supabase Auth reports HTTP 408 timeout", async () => {
+    const timeoutFactory = (() => ({ auth: { getUser: async () => ({ data: { user: null }, error: { status: 408 } }) } })) as SupabaseFactory;
+    const app = buildApp({ env, supabaseFactory: timeoutFactory });
+    const response = await app.inject({ method: "GET", url: "/api/v1/me", headers: { authorization: `Bearer ${token()}` } });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: { code: "AUTH_UNAVAILABLE", message: "Authentication service unavailable" }, requestId: response.headers["x-request-id"] });
+    await app.close();
+  });
+
   it("denies viewer on owner route", async () => {
     const app = buildApp({ env, supabaseFactory: factory("viewer") });
     app.get("/owner", { preHandler: [app.authenticate, app.requireRole("owner")] }, async () => ({ ok: true }));

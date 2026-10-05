@@ -19,7 +19,7 @@ export async function authenticateToken(token: string, env: AppEnv, supabaseFact
     const result = await client.auth.getUser(token);
     if (result.error) {
       const status = "status" in result.error ? result.error.status : undefined;
-      if (typeof status === "number" && status >= 400 && status < 500 && status !== 429) throw unauthorized();
+      if (typeof status === "number" && status >= 400 && status < 500 && status !== 408 && status !== 429) throw unauthorized();
       throw new ApiError(503, "AUTH_UNAVAILABLE", "Authentication service unavailable");
     }
     user = result.data.user;
