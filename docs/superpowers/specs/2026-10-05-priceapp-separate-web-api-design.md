@@ -6,7 +6,7 @@
 
 ## 1. Mục tiêu
 
-- Giữ một repository duy nhất, tổ chức thành workspace có `apps/web`, `apps/api` và `packages/contracts`.
+- Giữ một repository duy nhất với hai thư mục ứng dụng dễ nhận biết: `frontend/` và `backend/`; `supabase/` tiếp tục chứa migration/seed ở root.
 - Frontend và backend chạy riêng, có port, lệnh test/build và cấu hình triển khai riêng. Một lệnh tại repository root vẫn khởi chạy cả hai trong development.
 - Chuyển mọi truy vấn catalog, giá và thao tác quản trị từ browser sang backend. Browser chỉ dùng Supabase Auth để đăng nhập/duy trì session và gọi HTTP API.
 - Giữ Supabase Auth, PostgreSQL, RLS, Storage và các migration hiện có làm nền tảng dữ liệu; không di chuyển database khi tách ứng dụng.
@@ -18,24 +18,37 @@ Monorepo dùng npm workspaces:
 
 ```text
 price-app/
-  apps/
-    web/                 # Next.js UI và PWA, không chứa API nghiệp vụ
-    api/                 # Fastify + TypeScript REST API
-  packages/
-    contracts/           # Zod schemas, kiểu và hợp đồng HTTP
+  frontend/              # Next.js UI và PWA, không chứa API nghiệp vụ
+    src/
+    package.json
+  backend/               # Fastify + TypeScript REST API
+    src/
+      routes/            # Khai báo endpoint và nối controller
+      controllers/       # HTTP input/output, gọi service
+      services/          # Luồng nghiệp vụ và điều phối
+      repositories/      # Supabase queries và RPC
+      middleware/        # Auth, role, error handling, request ID
+      schemas/           # Zod request/response validation
+      config/            # Environment/config validation
+      app.ts
+      server.ts
+    openapi/             # API contract xuất từ schemas/routes
+    package.json
   supabase/
     migrations/
     seed.sql
-  package.json           # scripts và npm workspaces
+  package.json           # npm workspaces và lệnh điều phối ở root
 ```
 
-Frontend tiếp tục dùng Next.js App Router. Backend dùng Fastify vì các API hiện hữu đã viết bằng TypeScript/Node và có thể chuyển dần sang server độc lập. Hợp đồng API dùng schema Zod dùng chung; backend có thể xuất OpenAPI để kiểm tra tài liệu và tích hợp.
+Frontend tiếp tục dùng Next.js App Router. Backend dùng Fastify vì các API hiện hữu đã viết bằng TypeScript/Node và có thể chuyển dần sang server độc lập. Controller chỉ điều phối HTTP; service giữ luồng use case; repository gom Supabase reads/RPC để từng lớp có ranh giới kiểm thử rõ.
+
+Schema Zod trong backend là nguồn chuẩn cho request/response và được xuất thành OpenAPI. Frontend sinh kiểu/client từ OpenAPI vào `frontend/src/lib/api/generated`; không duy trì hai định nghĩa hợp đồng thủ công và không thêm thư mục ứng dụng thứ ba.
 
 Repository mẫu được cung cấp không tải được trong môi trường khảo sát (GitHub và raw README đều trả cache miss; kết nối GitHub trực tiếp bị chặn). Cấu trúc trên vì vậy dựa trên yêu cầu một repo và khảo sát PriceApp hiện có, không khẳng định sao chép chính xác repo mẫu.
 
 ## 3. Ranh giới thành phần
 
-### Frontend (`apps/web`)
+### Frontend (`frontend/`)
 
 - Hiển thị giao diện bán hàng, hỏi giá, quản trị nguồn và trạng thái đăng nhập.
 - Dùng Supabase client chỉ cho Auth/session; lấy access token hiện hành để gửi `Authorization: Bearer <token>` tới API.
@@ -43,7 +56,7 @@ Repository mẫu được cung cấp không tải được trong môi trường 
 - Không truy cập trực tiếp các bảng Supabase, Storage hoặc gọi RPC nghiệp vụ.
 - Báo giá tạm vẫn tính phía giao diện từ số gói đã chọn nhân `prices.amount` nguyên bản; không ghi báo giá vào database trong phạm vi tách này.
 
-### Backend (`apps/api`)
+### Backend (`backend/`)
 
 - Xác minh access token với Supabase Auth bằng `getUser(token)`; không chỉ giải mã JWT rồi tin claims.
 - Đọc profile/role và áp quyền owner/editor/viewer theo endpoint.
@@ -52,9 +65,9 @@ Repository mẫu được cung cấp không tải được trong môi trường 
 - Chỉ ghi/sửa/hoàn tác giá qua RPC audit hiện có, truyền `expected_version`; không viết trực tiếp vào `prices`.
 - Giữ cấu hình embedding/chat ở backend. Không trả provider key, prompt nội bộ hay lỗi upstream thô cho browser.
 
-### Hợp đồng (`packages/contracts`)
+### Hợp đồng API (`backend/src/schemas`, `backend/openapi`)
 
-- Định nghĩa schema đầu vào/đầu ra, mã lỗi và phiên bản API.
+- Định nghĩa schema đầu vào/đầu ra, mã lỗi và phiên bản API; xuất OpenAPI để frontend sinh client/kiểu.
 - Không chứa truy cập database, secrets hoặc logic giá có thẩm quyền.
 - Response không thay thế kiểm tra quyền, RLS hoặc kiểm tra lại giá ở thời điểm ghi.
 
@@ -86,7 +99,7 @@ Tên và payload chính xác sẽ được khóa trong implementation plan sau k
 
 ## 6. Chạy và cấu hình
 
-- Giữ npm làm package manager trong lần tách đầu; dùng npm workspaces, tránh đổi lockfile/package manager cùng lúc.
+- Giữ npm làm package manager trong lần tách đầu; khai báo `frontend` và `backend` trong npm workspaces, tránh đổi lockfile/package manager cùng lúc.
 - Frontend dev server mặc định cổng `3000`; backend cổng `4000`.
 - Root có `npm run dev`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`; từng workspace vẫn chạy được độc lập.
 - Frontend cấu hình `NEXT_PUBLIC_API_BASE_URL`; publishable key chỉ phục vụ Auth. Backend cấu hình Supabase URL/publishable key, CORS allowlist và provider RAG.
@@ -96,8 +109,8 @@ Tên và payload chính xác sẽ được khóa trong implementation plan sau k
 ## 7. Kế hoạch chuyển đổi và rollback
 
 1. Chụp baseline hiện tại: lint, typecheck, unit tests, build; ghi nhận API/contract và xác minh lỗi 401 hiện tại bằng test/integration có token thật mà không ghi token vào log.
-2. Tạo workspace và di chuyển Next.js sang `apps/web` cùng cấu hình/test; giữ hành vi hiện tại.
-3. Tạo Fastify `apps/api`, health/auth/role middleware, contracts và integration tests với Supabase test project.
+2. Tạo workspace và di chuyển Next.js sang `frontend/` cùng cấu hình/test; giữ hành vi hiện tại.
+3. Tạo Fastify `backend/` với routes/controllers/services/repositories, health/auth/role middleware, OpenAPI và integration tests với Supabase test project.
 4. Chuyển RAG API trước; thêm base URL và CORS; kiểm tra owner/viewer/invalid-token/expired-token.
 5. Chuyển catalog, giá và lịch sử đọc từ browser qua API.
 6. Chuyển cập nhật/undo sang API gọi đúng RPC audit; kiểm tra `expected_version`, offline read-only và tổng báo giá không đổi.
@@ -131,7 +144,7 @@ Không tạo/đổi schema Supabase trừ khi implementation phát hiện một 
 
 ## 10. Tự rà soát
 
-- Mục tiêu một repo và triển khai frontend/backend độc lập được mô tả nhất quán.
+- Mục tiêu một repo với hai thư mục ứng dụng `frontend/` và `backend/`, triển khai độc lập, được mô tả nhất quán.
 - Ranh giới browser/backend/Supabase và xử lý token được nêu rõ; không yêu cầu service-role.
 - Quy tắc giá, RPC audit, `expected_version`, RLS và offline read-only được giữ nguyên.
 - Repo tham khảo được ghi nhận là chưa truy cập được; không tuyên bố đã xem cấu trúc của repo đó.
