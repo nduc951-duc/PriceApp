@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
-  History,
   Home,
   Image as ImageIcon,
-  Layers3,
   LoaderCircle,
+  MessageCircle,
   Package,
   Pencil,
   RotateCcw,
   Search,
+  ShieldCheck,
   ShoppingCart,
   Trash2,
   Wifi,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { cacheSnapshot, readSnapshot } from "@/features/offline/cache";
 import { formatVnd, priceSchema } from "@/features/pricing/validation";
+import { selectBestPrice } from "@/features/pricing/select-price";
 import { matchesCatalogQuery } from "@/features/search/parser";
 import { createClient } from "@/lib/supabase/client";
 
@@ -128,101 +130,46 @@ type CatalogEditor = {
   expectedVersion: number | null;
 };
 
-function variantFamily(specification: string) {
-  const normalized = specification.trim();
-  const dimension = normalized.match(/^(\d+(?:\.\d+)?)\s*(?:ly\s*x\s*|x)/i);
-  if (dimension) return `${dimension[1]} ly`;
-  const ly = normalized.match(/^(\d+(?:\.\d+)?)\s*ly\b/i);
-  if (ly) return `${ly[1]} ly`;
-  const code = normalized.match(/^(\d+(?:F\d*|T\d*))(?=\b|\s|$)/i);
-  if (code) return code[1].toUpperCase();
-  if (/^m[oÃ³]c\b/i.test(normalized)) return "MÃ³c";
-  return null;
-}
-
-function variantChoiceLabel(specification: string, family: string) {
-  if (family === "MÃ³c") return specification;
-  const escapedFamily = family.replace(" ly", "");
-  return (
-    specification
-      .replace(new RegExp(`^${escapedFamily}\\s*(?:ly\\s*x\\s*|x|ly\\s*)`, "i"), "")
-      .trim() || specification
-  );
-}
-
-function compareVariantChoices(a: string, b: string, family: string) {
-  const labelA = variantChoiceLabel(a, family);
-  const labelB = variantChoiceLabel(b, family);
-  const numberA = Number.parseFloat(labelA.replace(",", "."));
-  const numberB = Number.parseFloat(labelB.replace(",", "."));
-  if (Number.isFinite(numberA) && Number.isFinite(numberB) && numberA !== numberB)
-    return numberA - numberB;
-  const thicknessRank = (label: string) =>
-    /m[oá»]ng/i.test(label) ? 0 : /d[aÃ ]y/i.test(label) ? 1 : 0;
-  const rankDifference = thicknessRank(labelA) - thicknessRank(labelB);
-  return rankDifference || labelA.localeCompare(labelB, "vi", { numeric: true });
-}
-
-function specificationSortValue(specification: string) {
-  const normalized = specification.trim().toUpperCase();
-  const phan = normalized.match(/^(\d+)F(\d*)$/);
-  if (phan) return Number(phan[1]) + (phan[2] ? Number(`0.${phan[2]}`) : 0);
-  const tac = normalized.match(/^(\d+)T(\d*)$/);
-  if (tac) return Number(tac[1]) * 10 + (tac[2] ? Number(tac[2]) : 0);
-  const numeric = Number.parseFloat(normalized.replace(",", "."));
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function compareSpecifications(a: string, b: string) {
-  const numberA = specificationSortValue(a);
-  const numberB = specificationSortValue(b);
-  if (numberA !== null && numberB !== null && numberA !== numberB)
-    return numberA - numberB;
-  if (numberA !== null && numberB === null) return -1;
-  if (numberA === null && numberB !== null) return 1;
-  return a.localeCompare(b, "vi", { numeric: true });
-}
-
 function displaySpecification(specification: string) {
   return specification
-    .replace(/^1T$/i, "1 táº¥c")
-    .replace(/\bmong\b/gi, "má»ng")
-    .replace(/\bday\b/gi, "dÃ y")
-    .replace(/\bmoc\b/gi, "mÃ³c");
+    .replace(/^1T$/i, "1 tấc")
+    .replace(/\bmong\b/gi, "mỏng")
+    .replace(/\bday\b/gi, "dày")
+    .replace(/\bmoc\b/gi, "móc");
 }
 
 function displayPackageName(packageName: string) {
   const legacyNames: Record<string, string> = {
-    "Láº» 10 con": "10 con/bá»‹ch",
-    "Bá»‹ch 95 con": "95 con/bá»‹ch",
-    "Há»™p 50 con": "50 con/há»™p",
-    "Láº» 1 con": "1 con",
-    "GÃ³i nhá» 100 con": "100 con/gÃ³i",
-    "Bá»‹ch lá»›n 1.000 con": "1.000 con/bá»‹ch",
-    "Láº» 1 bÃ¡nh": "1 bÃ¡nh/cÃ¡i",
-    "Le 10 bo": "10 bá»™/bá»‹ch",
-    "Bich 100 bo": "100 bá»™/bá»‹ch",
-    "Le 1 met": "1 mÃ©t",
-    "Cuon 100 met": "100 mÃ©t/cuá»™n",
+    "Lẻ 10 con": "10 con/bịch",
+    "Bịch 95 con": "95 con/bịch",
+    "Hộp 50 con": "50 con/hộp",
+    "Lẻ 1 con": "1 con",
+    "Gói nhỏ 100 con": "100 con/gói",
+    "Bịch lớn 1.000 con": "1.000 con/bịch",
+    "Lẻ 1 bánh": "1 bánh/cái",
+    "Le 10 bo": "10 bộ/bịch",
+    "Bich 100 bo": "100 bộ/bịch",
+    "Le 1 met": "1 mét",
+    "Cuon 100 met": "100 mét/cuộn",
   };
   return legacyNames[packageName] ?? packageName;
 }
 
 function displayItemPackageName(item: Item) {
-  if (item.name === "MÃ³c U") {
-    if (item.packageQuantity === 10) return "10 con/bá»‹ch";
-    if (item.packageQuantity === 100) return "100 con/bá»‹ch";
+  if (item.name === "Móc U") {
+    if (item.packageQuantity === 10) return "10 con/bịch";
+    if (item.packageQuantity === 100) return "100 con/bịch";
     if (item.packageQuantity === 1) return "1 con";
   }
   return displayPackageName(item.packageName);
 }
 
 function displayPriceType(item: Item) {
-  if (item.name === "MÃ³c U")
-    return item.priceType === "wholesale" ? "GiÃ¡ sá»‰" : "GiÃ¡ láº»";
-  if (item.packageName.startsWith("Äáº§u trÃ²n + lÃ¡")) return "Äáº§u trÃ²n + lÃ¡";
-  if (item.packageName.startsWith("Äáº§u dÃ¹")) return "Äáº§u dÃ¹";
-  return item.priceType === "wholesale" ? "GiÃ¡ sá»‰" : "GiÃ¡ láº»";
+  if (item.name === "Móc U")
+    return item.priceType === "wholesale" ? "Giá sỉ" : "Giá lẻ";
+  if (item.packageName.startsWith("Đầu tròn + lá")) return "Đầu tròn + lá";
+  if (item.packageName.startsWith("Đầu dù")) return "Đầu dù";
+  return item.priceType === "wholesale" ? "Giá sỉ" : "Giá lẻ";
 }
 
 const recent = ["bulong 8ly 3f", "tac ke 6x50", "day cap inox 6 ly"];
@@ -237,21 +184,21 @@ export function PriceApp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [history, setHistory] = useState<UndoEntry[]>([]);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [selected, setSelected] = useState<{
     name: string;
     spec: string;
   } | null>(null);
   const [packageCounts, setPackageCounts] = useState<Record<number, string>>({});
+  const [retailPackageCount, setRetailPackageCount] = useState("1");
   const [invoice, setInvoice] = useState<InvoiceLine[]>([]);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [invoiceReady, setInvoiceReady] = useState(false);
+  const [quoteMessage, setQuoteMessage] = useState("");
   const [openingSource, setOpeningSource] = useState<string | null>(null);
   const [sourceImageError, setSourceImageError] = useState("");
   const [catalogEditor, setCatalogEditor] = useState<CatalogEditor | null>(null);
   const [savingCatalog, setSavingCatalog] = useState(false);
-  const [variantFamilyFilters, setVariantFamilyFilters] = useState<
-    Record<string, string>
-  >({});
 
   useEffect(() => {
     const updateNetwork = () => setOnline(navigator.onLine);
@@ -266,7 +213,12 @@ export function PriceApp() {
           setSynced(cached.syncedAt);
         }
         const cachedEntries = await readSnapshot<CatalogEntry[]>("catalog-entries");
-        if (cachedEntries) setCatalogEntries(cachedEntries.data);
+        if (cachedEntries) {
+          setCatalogEntries(cachedEntries.data);
+          const requestedVariant = Number(new URLSearchParams(window.location.search).get("variantId"));
+          const matched = cachedEntries.data.find((entry) => entry.variantId === requestedVariant);
+          if (matched) setSelected({ name: matched.name, spec: matched.spec });
+        }
         setLoading(false);
         return;
       }
@@ -286,7 +238,7 @@ export function PriceApp() {
         .neq("verification_status", "sample")
         .limit(1000);
       if (loadError) {
-        setError(`KhÃ´ng táº£i Ä‘Æ°á»£c báº£ng giÃ¡: ${loadError.message}`);
+        setError(`Không tải được bảng giá: ${loadError.message}`);
         setLoading(false);
         return;
       }
@@ -296,7 +248,7 @@ export function PriceApp() {
         productId: variant.products?.id ?? 0,
         variantId: variant.id,
         name: variant.products?.name ?? variant.display_name,
-        category: variant.products?.categories?.name ?? "ChÆ°a phÃ¢n nhÃ³m",
+        category: variant.products?.categories?.name ?? "Chưa phân nhóm",
         spec: variant.raw_specification ?? variant.display_name,
         displayName: variant.display_name,
         sourcePages: variant.variant_sources
@@ -316,9 +268,9 @@ export function PriceApp() {
             variantId: variant.id,
             packagingId: pack.id,
             name: variant.products?.name ?? variant.display_name,
-            category: variant.products?.categories?.name ?? "ChÆ°a phÃ¢n nhÃ³m",
+            category: variant.products?.categories?.name ?? "Chưa phân nhóm",
             variantDisplayName: variant.display_name,
-            spec: `${variant.raw_specification ?? variant.display_name} â€¢ ${pack.name}`,
+            spec: `${variant.raw_specification ?? variant.display_name} • ${pack.name}`,
             variantSpec: variant.raw_specification ?? variant.display_name,
             packageName: pack.name,
             packageQuantity: Number(pack.quantity),
@@ -328,7 +280,7 @@ export function PriceApp() {
             price: Number(price.amount),
             unit: pack.base_unit,
             supplier:
-              price.price_lists?.suppliers?.name ?? "ChÆ°a rÃµ nhÃ  cung cáº¥p",
+              price.price_lists?.suppliers?.name ?? "Chưa rõ nhà cung cấp",
             sourcePages: variant.variant_sources
               .map((source) => source.source_pages?.page_number)
               .filter((page): page is number => page !== null && page !== undefined),
@@ -342,6 +294,14 @@ export function PriceApp() {
       );
       setItems(loaded);
       setCatalogEntries(entries);
+      const requestedVariant = Number(new URLSearchParams(window.location.search).get("variantId"));
+      const matchedVariant = rows.find((row) => row.id === requestedVariant);
+      if (matchedVariant) {
+        setSelected({
+          name: matchedVariant.products?.name ?? matchedVariant.display_name,
+          spec: matchedVariant.raw_specification ?? matchedVariant.display_name,
+        });
+      }
       await cacheSnapshot("catalog", loaded);
       await cacheSnapshot("catalog-entries", entries);
       setSynced(new Date().toISOString());
@@ -353,6 +313,15 @@ export function PriceApp() {
       removeEventListener("offline", updateNetwork);
     };
   }, [supabase]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (event.key === "F1") { event.preventDefault(); document.getElementById("product-search")?.focus(); }
+      if (event.key === "F4") { event.preventDefault(); setInvoiceOpen(true); }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
 
   const groups = useMemo<ProductGroup[]>(() => {
     const grouped = new Map<string, { entries: CatalogEntry[]; items: Item[] }>();
@@ -397,14 +366,14 @@ export function PriceApp() {
         wholesaleFrom: groupItems.some(
           (item) =>
             item.priceType === "wholesale" &&
-            !item.packageNote.includes("ChÆ°a rÃµ sá»‘ lÆ°á»£ng tá»‘i thiá»ƒu"),
+            !item.packageNote.includes("Chưa rõ số lượng tối thiểu"),
         )
           ? Math.min(
               ...groupItems
                 .filter(
                   (item) =>
                     item.priceType === "wholesale" &&
-                    !item.packageNote.includes("ChÆ°a rÃµ sá»‘ lÆ°á»£ng tá»‘i thiá»ƒu"),
+                    !item.packageNote.includes("Chưa rõ số lượng tối thiểu"),
                 )
                 .map((item) => item.packageQuantity),
             )
@@ -435,6 +404,15 @@ export function PriceApp() {
           item.name === selected.name && item.variantSpec === selected.spec,
       )
     : [];
+  const smallestRetailQuantity = selectedPrices
+    .filter((item) => item.priceType === "retail" && item.packageQuantity > 0)
+    .reduce((smallest, item) => Math.min(smallest, item.packageQuantity), Infinity);
+  const retailUnit = selectedPrices.find((item) => item.priceType === "retail" && item.packageQuantity === smallestRetailQuantity)?.unit;
+  const suggestedPrice = selectBestPrice(
+    selectedPrices.filter((item) => item.unit === retailUnit),
+    Number(retailPackageCount),
+    smallestRetailQuantity,
+  );
   const selectedCatalogEntries = selected
     ? catalogEntries.filter(
         (entry) =>
@@ -465,7 +443,8 @@ export function PriceApp() {
         unitPrice: item.price,
         requestedQuantity: packageCount * item.packageQuantity,
         total: packageCount * item.price,
-        eligible: packageCount > 0,
+        eligible: packageCount >= Math.max(1, item.minimumQuantity) &&
+          !(item.priceType === "wholesale" && item.packageNote.includes("Chưa rõ số lượng tối thiểu")),
       };
     })
     .sort(
@@ -476,6 +455,15 @@ export function PriceApp() {
     );
   const recommended = priceOptions.find((option) => option.eligible) ?? priceOptions[0];
   const displayedPriceOptions = priceOptions;
+  const activeInvoice = useMemo(() => {
+    if (loading || items.length === 0) return [];
+    const currentPrices = new Map(items.map((item) => [item.priceId, item]));
+    return invoice.flatMap((line) => {
+      const item = currentPrices.get(line.item.priceId);
+      if (!item) return [];
+      return [{ ...line, item, unitPrice: item.price, total: line.packageCount * item.price }];
+    });
+  }, [invoice, items, loading]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -534,10 +522,24 @@ export function PriceApp() {
     setTimeout(
       () =>
         document
-          .querySelector<HTMLInputElement>('[aria-label="TÃ¬m váº­t tÆ°"]')
+          .querySelector<HTMLInputElement>('[aria-label="Tìm vật tư"]')
           ?.focus(),
       0,
     );
+  }
+
+  async function copyQuote() {
+    if (activeInvoice.length === 0) return;
+    const lines = activeInvoice.map((line, index) =>
+      `${index + 1}. ${line.item.name} · ${displaySpecification(line.item.variantSpec)} · ${line.packageCount} ${displayItemPackageName(line.item)} × ${formatVnd(line.item.price)} = ${formatVnd(line.packageCount * line.item.price)}`,
+    );
+    const total = activeInvoice.reduce((sum, line) => sum + line.packageCount * line.item.price, 0);
+    try {
+      await navigator.clipboard.writeText(["BÁO GIÁ VẬT TƯ", ...lines, `Tổng cộng: ${formatVnd(total)}`].join("\n"));
+      setQuoteMessage("Đã sao chép báo giá. Có thể dán vào tin nhắn cho khách.");
+    } catch {
+      setQuoteMessage("Không sao chép được. Hãy kiểm tra quyền truy cập bộ nhớ tạm của trình duyệt.");
+    }
   }
 
   async function openSourceImage(storagePath: string) {
@@ -563,7 +565,7 @@ export function PriceApp() {
     if (!supabase) {
       imageWindow?.close();
       setOpeningSource(null);
-      setSourceImageError(`KhÃ´ng tÃ¬m tháº¥y áº£nh cá»¥c bá»™ ${fileName ?? objectPath}.`);
+      setSourceImageError(`Không tìm thấy ảnh cục bộ ${fileName ?? objectPath}.`);
       return;
     }
     const { data, error: signedUrlError } = await supabase.storage
@@ -574,7 +576,7 @@ export function PriceApp() {
       imageWindow?.close();
       setSourceImageError(
         signedUrlError?.message ??
-          "KhÃ´ng táº¡o Ä‘Æ°á»£c liÃªn káº¿t áº£nh. Kiá»ƒm tra file Ä‘Ã£ Ä‘Æ°á»£c upload.",
+          "Không tạo được liên kết ảnh. Kiểm tra file đã được upload.",
       );
       return;
     }
@@ -610,6 +612,10 @@ export function PriceApp() {
   async function saveCatalogEditor() {
     const form = catalogEditor;
     if (!form || !supabase || savingCatalog) return;
+    if (!navigator.onLine) {
+      setError("Đang ngoại tuyến: chỉ có thể xem bảng giá đã lưu. Hãy kết nối mạng để sửa giá.");
+      return;
+    }
     setSavingCatalog(true);
     setError("");
     const { data, error: updateError } = await supabase.rpc(
@@ -643,10 +649,10 @@ export function PriceApp() {
     if (updateError) {
       setError(
         updateError.message.includes("owner_required")
-          ? "Chá»‰ tÃ i khoáº£n chá»§ cá»­a hÃ ng má»›i Ä‘Æ°á»£c sá»­a toÃ n bá»™ thÃ´ng tin."
+          ? "Chỉ tài khoản chủ cửa hàng mới được sửa toàn bộ thông tin."
           : updateError.message.includes("duplicate key")
-            ? "TÃªn vá»«a nháº­p Ä‘ang trÃ¹ng vá»›i má»™t dá»¯ liá»‡u Ä‘Ã£ cÃ³."
-            : `KhÃ´ng lÆ°u Ä‘Æ°á»£c: ${updateError.message}`,
+            ? "Tên vừa nhập đang trùng với một dữ liệu đã có."
+            : `Không lưu được: ${updateError.message}`,
       );
       return;
     }
@@ -726,6 +732,11 @@ export function PriceApp() {
   }
 
   async function save(itemId: number, raw: string) {
+    if (!navigator.onLine) {
+      setError("Đang ngoại tuyến: chỉ có thể xem bảng giá đã lưu. Hãy kết nối mạng để sửa giá.");
+      setEditing(null);
+      return;
+    }
     const parsed = priceSchema.safeParse(raw.replace(/\D/g, ""));
     const item = items.find((candidate) => candidate.id === itemId);
     if (!parsed.success || !item || !supabase) {
@@ -739,13 +750,13 @@ export function PriceApp() {
         p_price_id: item.priceId,
         p_new_amount: parsed.data,
         p_expected_version: item.version,
-        p_reason: "Cáº­p nháº­t tá»« á»©ng dá»¥ng",
+        p_reason: "Cập nhật từ ứng dụng",
       },
     );
     if (saveError) {
       setError(
         saveError.message.includes("version_conflict")
-          ? "GiÃ¡ Ä‘Ã£ Ä‘Æ°á»£c ngÆ°á»i khÃ¡c sá»­a. HÃ£y táº£i láº¡i trang."
+          ? "Giá đã được người khác sửa. Hãy tải lại trang."
           : saveError.message,
       );
       setEditing(null);
@@ -769,6 +780,11 @@ export function PriceApp() {
           : row,
       ),
     );
+    setInvoice((current) => current.map((line) =>
+      line.item.priceId === item.priceId
+        ? { ...line, item: { ...line.item, price: Number(updated.amount), version: updated.version }, unitPrice: Number(updated.amount), total: line.packageCount * Number(updated.amount) }
+        : line,
+    ));
     if (historyId)
       setHistory((current) => [
         ...current,
@@ -783,6 +799,10 @@ export function PriceApp() {
   }
 
   async function undo() {
+    if (!navigator.onLine) {
+      setError("Đang ngoại tuyến: không thể hoàn tác sửa giá. Hãy kết nối mạng rồi thử lại.");
+      return;
+    }
     const last = history.at(-1);
     if (!last || !supabase) return;
     const { data, error: undoError } = await supabase.rpc("undo_price_change", {
@@ -809,240 +829,27 @@ export function PriceApp() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-[var(--line)] bg-[var(--card)]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-[var(--green)] text-xl font-black text-white">
-              Ä‘
-            </span>
-            <div>
-              <p className="text-lg font-black">GIÃ CHUáº¨N</p>
-              <p className="text-xs text-[var(--muted)]">
-                Váº­t tÆ° Ä‘Ãºng giÃ¡, Ä‘Ãºng lÃºc
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span
-              className={`hidden items-center gap-1.5 text-sm sm:flex ${online ? "text-emerald-700" : "text-amber-700"}`}
-            >
-              {online ? <Wifi size={16} /> : <WifiOff size={16} />}{" "}
-              {online ? "Trá»±c tuyáº¿n" : "Ngoáº¡i tuyáº¿n"}
-            </span>
-            <a href="/questions" className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm font-bold">Hỏi giá</a>
-            <button
-              onClick={() => setInvoiceOpen(true)}
-              className="relative flex items-center gap-2 rounded-xl bg-[var(--green)] px-3 py-2 text-sm font-bold text-white"
-            >
-              <ShoppingCart size={18} />{" "}
-              <span className="hidden sm:inline">HÃ³a Ä‘Æ¡n</span>
-              {invoice.length > 0 && (
-                <span className="grid size-5 place-items-center rounded-full bg-[var(--lime)] text-[10px] text-[var(--ink)]">
-                  {invoice.length}
-                </span>
-              )}
-            </button>
-          </div>
+      <header className="pos-header">
+        <div className="pos-header-inner">
+          <Link href="/#sales-workspace" className="pos-brand" aria-label="Giá Chuẩn - về tra cứu"><span className="pos-brand-mark">đ</span><span className="pos-brand-copy"><b>Giá Chuẩn</b><small>HỆ THỐNG QUẦY KIM KHÍ & BÁN LẺ</small></span></Link>
+          <nav className="pos-top-nav" aria-label="Điều hướng chính"><Link href="/#sales-workspace" className="pos-nav-active">Tra cứu & bán hàng</Link><Link href="/questions" className="pos-nav-item">Hỏi giá</Link><button type="button" className="pos-nav-item" onClick={() => document.getElementById("invoice-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Hóa đơn quầy</button><button type="button" className="pos-nav-item" onClick={() => selected ? setDetailOpen(true) : document.getElementById("product-search")?.focus()}>Cập nhật & sửa giá</button></nav>
+          <div className="pos-header-actions"><div className="pos-live-badge">{online ? <Wifi size={13}/> : <WifiOff size={13}/>}<span>{synced ? (online ? "ĐÃ CẬP NHẬT" : "ĐANG XEM BẢN LƯU") : online ? "ĐANG KẾT NỐI" : "NGOẠI TUYẾN"}</span></div><span className="pos-header-count">{loading ? "Đang tải…" : items.length + " mức giá"}</span><button type="button" onClick={() => setInvoiceOpen(true)} className="pos-invoice-button"><ShoppingCart size={18}/><span>Hóa đơn</span><b>{activeInvoice.length}</b></button></div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-5 py-8 sm:py-12">
-        <p className="mb-2 text-sm font-bold uppercase tracking-[.18em] text-[var(--green)]">
-          Tra cá»©u tá»©c thÃ¬
-        </p>
-        <h1 className="text-4xl font-black tracking-[-.04em] sm:text-6xl">
-          TÃ¬m Ä‘Ãºng váº­t tÆ°.
-          <br />
-          <span className="text-[var(--green)]">Biáº¿t ngay giÃ¡.</span>
-        </h1>
-        <div className="relative mt-8 max-w-3xl">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-[var(--green)]" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label="TÃ¬m váº­t tÆ°"
-            placeholder="Thá»­ 'bulong 8ly 3f'..."
-            className="h-16 w-full rounded-2xl border-2 border-[var(--green)] bg-white pl-14 pr-5 text-lg outline-none shadow-[0_8px_0_#d9e2d8]"
-          />
+      <main className="pos-main">
+        {error && <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p>}
+        <div className="pos-shift-bar"><div className="pos-shift-title"><span className="pos-shift-pulse"/> CA TRỰC · QUẦY CHÍNH <span className="pos-shift-note">Bảng giá vật tư · dữ liệu từ {new Set(items.flatMap(item => item.sourcePages)).size} trang nguồn</span></div><div className="pos-shift-meta"><span>{synced ? (online ? "Bảng giá đã đồng bộ" : "Đang dùng bảng giá đã lưu") : online ? "Đang tải dữ liệu Supabase…" : "Chưa có dữ liệu ngoại tuyến"}</span><span className="pos-meta-separator">•</span><span>{groups.length} nhóm hàng</span><span className="pos-meta-separator">•</span><span>{items.length} mức giá</span>{history.length > 0 && <button type="button" className="pos-undo-button" onClick={undo}><RotateCcw size={13}/> Hoàn tác sửa giá</button>}</div></div>
+        <div className="pos-workspace">
+          <section id="sales-workspace" className="pos-column pos-catalog-column">
+            <div className="pos-panel pos-search-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">F1 · TRA CỨU NHANH</p><h1>Tìm vật tư</h1></div><Search className="text-[var(--green)]" size={23}/></div><label htmlFor="product-search" className="sr-only">Tìm tên hàng hoặc quy cách</label><div className="pos-search-field"><Search size={20}/><input id="product-search" value={query} onChange={event => setQuery(event.target.value)} aria-label="Tìm vật tư" placeholder="Tên hàng, mã hoặc quy cách…" autoComplete="off"/><kbd>F1</kbd></div>{!query && <div className="pos-quick-search">{recent.map(value => <button key={value} type="button" onClick={() => setQuery(value)}>{value}</button>)}</div>}</div>
+            <div className="pos-panel pos-results-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">DANH MỤC VẬT TƯ</p><h2>{query ? "Kết quả tìm kiếm" : "Chọn mặt hàng"}</h2></div><span className="pos-result-count">{loading ? "…" : shown.length}</span></div>{error && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}<div className="pos-product-list">{shown.map(group => <article key={group.category + "-" + group.name} className="pos-product-card"><div className="pos-product-heading"><div><span className="pos-category-label">{group.category}</span><h3>{group.name}</h3></div><span className="pos-product-price">{group.minPrice === null ? "Chưa có giá" : "Từ " + formatVnd(group.minPrice)}</span></div><div className="pos-variant-list">{group.variants.map(spec => <button key={spec} type="button" onClick={() => { setDetailOpen(false); setSelected({ name: group.name, spec }); }} className={"pos-variant-chip " + (selected?.name === group.name && selected.spec === spec ? "pos-variant-selected" : "")}><span>{displaySpecification(spec)}</span><small>{group.items.filter(item => item.variantSpec === spec).length ? group.items.filter(item => item.variantSpec === spec).length + " giá" : "Chưa có giá"}</small></button>)}</div>{group.wholesaleFrom !== null && <p className="pos-wholesale-hint">Giá sỉ từ {group.wholesaleFrom} {group.unit}</p>}</article>)}{!loading && shown.length === 0 && <div className="pos-empty-small"><Package size={22}/><span>Không tìm thấy mặt hàng phù hợp.</span></div>}</div></div>
+          </section>
+          <section className="pos-column pos-detail-column" aria-label="Chi tiết mặt hàng">{selected ? <div className="pos-panel pos-detail-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">MẶT HÀNG ĐANG CHỌN</p><h2>{selected.name}</h2></div><button type="button" className="pos-close-detail" onClick={() => setSelected(null)} aria-label="Bỏ chọn mặt hàng"><X size={18}/></button></div><div className="pos-spec-banner"><div><span className="pos-category-label">QUY CÁCH</span><b>{displaySpecification(selected.spec)}</b></div><button type="button" onClick={() => setDetailOpen(true)}><Pencil size={15}/> Chi tiết & sửa</button></div><div className="pos-source-row"><span>{selectedSourcePages.length ? "Nguồn sổ: trang " + selectedSourcePages.join(", ") : "Chưa gắn trang nguồn"}</span>{selectedSourceFiles.map(file => <button key={file} type="button" onClick={() => openSourceImage(file)} disabled={openingSource !== null}><ImageIcon size={14}/>{openingSource === file ? "Đang mở…" : "Xem ảnh"}</button>)}</div>{sourceImageError && <p role="alert" className="my-2 text-xs font-bold text-red-700">{sourceImageError}</p>}<div className="pos-suggestion"><label htmlFor="retail-package-count">Số lượng theo gói lẻ nhỏ nhất ({Number.isFinite(smallestRetailQuantity) ? smallestRetailQuantity : "?"} {retailUnit ?? "đơn vị"}/gói)</label><input id="retail-package-count" inputMode="numeric" pattern="[0-9]*" value={retailPackageCount} onChange={event => setRetailPackageCount(event.target.value.replace(/\D/g, ""))} aria-describedby="retail-package-help"/><p id="retail-package-help">{suggestedPrice ? <>Gợi ý: {suggestedPrice.packageCount} × {displayItemPackageName(suggestedPrice.item)} · <strong>{formatVnd(suggestedPrice.item.price)}/gói</strong> · thành tiền <strong>{formatVnd(suggestedPrice.total)}</strong></> : "Chưa có dòng giá đủ điều kiện và bao bì khớp chính xác số lượng này."}</p><button type="button" disabled={!suggestedPrice} onClick={() => { if (suggestedPrice) addToInvoice({ ...suggestedPrice, unitPrice: suggestedPrice.item.price, requestedQuantity: suggestedPrice.packageCount * suggestedPrice.item.packageQuantity }); }}>Thêm mức giá gợi ý vào báo giá</button></div><div className="pos-price-list">{priceOptions.length ? priceOptions.map(option => <article className="pos-price-card" key={option.item.priceId}><div className="pos-price-card-top"><div><span className={"pos-tier-badge " + (option.item.priceType === "wholesale" ? "pos-tier-wholesale" : "")}>{displayPriceType(option.item)}</span><b>{displayItemPackageName(option.item)}</b></div><span className={"pos-verification " + (option.item.status === "verified" ? "pos-verified" : "")}>{option.item.status === "verified" ? "Đã duyệt" : option.item.status === "unreadable" ? "Khó đọc" : "Cần đối chiếu"}</span></div><p className="pos-min-quantity">{option.item.packageQuantity} {option.item.unit} / {displayItemPackageName(option.item)}{option.item.minimumQuantity > 1 ? " · tối thiểu " + option.item.minimumQuantity + " gói" : ""}</p><div className="pos-price-amount">{formatVnd(option.unitPrice)}</div><div className="pos-quantity-control"><button type="button" aria-label={"Giảm " + displayItemPackageName(option.item)} onClick={() => setPackageCounts(current => ({ ...current, [option.item.priceId]: String(Math.max(0, option.packageCount - 1)) }))}>−</button><input aria-label={"Số lượng " + displayItemPackageName(option.item)} inputMode="numeric" value={packageCounts[option.item.priceId] ?? "0"} onChange={event => setPackageCounts(current => ({ ...current, [option.item.priceId]: event.target.value.replace(/\D/g, "") }))}/><button type="button" aria-label={"Tăng " + displayItemPackageName(option.item)} onClick={() => setPackageCounts(current => ({ ...current, [option.item.priceId]: String(option.packageCount + 1) }))}>+</button><span>{option.requestedQuantity} {option.item.unit}</span></div>{option.item.priceType === "wholesale" && option.item.packageNote.includes("Chưa rõ số lượng tối thiểu") && <p className="pos-price-warning">Chưa xác nhận ngưỡng áp dụng giá sỉ.</p>}<div className="pos-price-card-footer"><span>Tạm tính <b>{formatVnd(option.total)}</b></span><button type="button" disabled={!option.eligible} onClick={() => addToInvoice(option)}><ShoppingCart size={16}/>{option.eligible ? "Thêm vào báo giá" : option.packageCount === 0 ? "Nhập số gói" : "Chưa đủ điều kiện"}</button></div></article>) : <div className="pos-no-prices"><Package size={28}/><b>Chưa có giá cho quy cách này</b><span>Có thể kiểm tra ảnh nguồn hoặc cập nhật dữ liệu.</span><button type="button" onClick={() => setDetailOpen(true)}><Pencil size={15}/> Mở chi tiết sản phẩm</button></div>}</div><div className="pos-detail-bottom"><button type="button" onClick={() => setDetailOpen(true)}><ImageIcon size={16}/> Đối chiếu sổ giá</button>{selectedPrices.some(item => item.status !== "verified") && <span>Giá cần đối chiếu trước khi dùng</span>}</div></div> : <div className="pos-panel pos-selection-empty"><span className="pos-empty-icon"><Package size={28}/></span><p className="pos-eyebrow">CHI TIẾT GIAO DỊCH</p><h2>Chọn một quy cách</h2><p>Chọn sản phẩm ở cột trái để xem các mức giá, nguồn sổ và thêm số lượng vào hóa đơn.</p><Link href="/questions" className="pos-ask-link"><MessageCircle size={17}/> Hỏi giá bằng câu tự nhiên</Link><div className="pos-step-note"><span>1</span> Tìm mặt hàng <span>2</span> Chọn quy cách <span>3</span> Thêm vào hóa đơn</div></div>}</section>
+          <aside id="invoice-panel" className="pos-column pos-invoice-column"><div className="pos-panel pos-invoice-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">F4 · GIỎ HÀNG</p><h2>Hóa đơn quầy</h2></div><button type="button" className="pos-icon-action" onClick={() => setInvoiceOpen(true)} aria-label="Mở hóa đơn đầy đủ"><ShoppingCart size={18}/></button></div><div className="pos-customer-note"><span className="pos-customer-icon"><Package size={17}/></span><div><b>Hóa đơn tạm tính</b><small>{activeInvoice.length} mặt hàng · lưu trên thiết bị này</small></div></div><div className="pos-invoice-lines">{activeInvoice.length ? activeInvoice.map((line, index) => <article key={line.key} className="pos-invoice-line"><div className="pos-invoice-line-head"><span className="pos-line-number">{index + 1}</span><b>{line.item.name}</b><button type="button" aria-label={"Xóa " + line.item.name + " khỏi hóa đơn"} onClick={() => setInvoice(current => current.filter(item => item.key !== line.key))}><Trash2 size={15}/></button></div><p>{displaySpecification(line.item.variantSpec)} · {line.requestedQuantity} {line.item.unit}</p><div><span>{line.packageCount} × {formatVnd(line.unitPrice)}</span><b>{formatVnd(line.total)}</b></div></article>) : <div className="pos-invoice-empty"><ShoppingCart size={24}/><span>Chưa có sản phẩm trong hóa đơn.</span></div>}</div><div className="pos-invoice-total"><span>TỔNG CỘNG</span><strong>{formatVnd(activeInvoice.reduce((sum, line) => sum + line.total, 0))}</strong><small>Giá theo quy cách đã chọn · VND</small></div><button type="button" className="pos-open-invoice" onClick={() => setInvoiceOpen(true)}><ShoppingCart size={17}/> Xem & sao chép báo giá <kbd>F4</kbd></button>{invoice.length > 0 && <button type="button" className="pos-clear-invoice" onClick={() => setInvoice([])}>Xóa toàn bộ hóa đơn</button>}<div className="pos-invoice-footnote"><ShieldCheck size={15}/> Giá lấy từ bảng hiện tại; chưa thực hiện thanh toán.</div></div></aside>
         </div>
-        {!query && (
-          <div className="mt-5 flex gap-2 overflow-x-auto">
-            {recent.map((value) => (
-              <button
-                key={value}
-                onClick={() => setQuery(value)}
-                className="shrink-0 rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm"
-              >
-                {value}
-              </button>
-            ))}
-          </div>
-        )}
-        <section className="mt-12">
-          <div className="mb-5 flex items-end justify-between">
-            <div>
-              <p className="text-sm font-bold text-[var(--muted)]">
-                {loading
-                  ? "Äang táº£i báº£ng giÃ¡â€¦"
-                  : `${shown.length} nhÃ³m sáº£n pháº©m`}
-              </p>
-              <h2 className="text-2xl font-black">
-                {query ? `Káº¿t quáº£ cho â€œ${query}â€` : "Báº£ng giÃ¡ hiá»‡n táº¡i"}
-              </h2>
-            </div>
-            {history.length > 0 && (
-              <button
-                onClick={undo}
-                className="flex items-center gap-2 rounded-xl bg-[var(--lime)] px-4 py-2 text-sm font-bold"
-              >
-                <RotateCcw size={16} /> HoÃ n tÃ¡c
-              </button>
-            )}
-          </div>
-          {error && (
-            <p
-              role="alert"
-              className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-800"
-            >
-              {error}
-            </p>
-          )}
-          <div className="grid gap-4 lg:grid-cols-2">
-            {shown.map((group) => {
-              const groupKey = `${group.category}\u0000${group.name}`;
-              const families = [
-                ...new Set(
-                  group.variants
-                    .map(variantFamily)
-                    .filter((family): family is string => family !== null),
-                ),
-              ].sort(compareSpecifications);
-              const useTwoLevels =
-                families.length > 1 &&
-                group.variants.filter((spec) => variantFamily(spec)).length >= 4 &&
-                group.variants.length > families.length;
-              const activeFamily = variantFamilyFilters[groupKey] ?? families[0] ?? "";
-              const visibleVariants = useTwoLevels
-                ? activeFamily
-                  ? group.variants.filter(
-                      (spec) => variantFamily(spec) === activeFamily,
-                    ).sort((a, b) => compareVariantChoices(a, b, activeFamily))
-                  : []
-                : [...group.variants].sort(compareSpecifications);
-              return (
-              <article
-                key={`${group.category}-${group.name}`}
-                className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-xl font-black">{group.name}</h3>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      {group.variants.length} quy cÃ¡ch â€¢{" "}
-                      {group.minPrice === null
-                        ? "chÆ°a cÃ³ giÃ¡ Ä‘Ã£ Ä‘á»c"
-                        : `tá»« ${formatVnd(group.minPrice)}${
-                            group.maxPrice !== group.minPrice
-                              ? ` â€“ ${formatVnd(group.maxPrice ?? group.minPrice)}`
-                              : ""
-                          }`}
-                    </p>
-                    {group.wholesaleFrom !== null && (
-                      <p className="mt-1 text-xs font-bold text-amber-700">
-                        GiÃ¡ sá»‰ tá»« {group.wholesaleFrom} {group.unit}
-                        {group.smallestRetailPackage
-                          ? ` (â‰ˆ ${Math.ceil(group.wholesaleFrom / group.smallestRetailPackage)} gÃ³i láº» Ã— ${group.smallestRetailPackage} ${group.unit})`
-                          : ""}
-                      </p>
-                    )}
-                  </div>
-                  <span className="rounded-full bg-[#edf1e8] px-3 py-1 text-xs font-bold">
-                    {group.items.length} giÃ¡
-                  </span>
-                </div>
-                <div className="my-4 h-px bg-[var(--line)]" />
-                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--muted)]">
-                  {useTwoLevels
-                    ? "BÆ°á»›c 1 Â· Chá»n Ä‘Æ°á»ng kÃ­nh hoáº·c loáº¡i"
-                    : "Chá»n quy cÃ¡ch Ä‘á»ƒ xem giÃ¡"}
-                </p>
-                {useTwoLevels && (
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {families.map((family) => (
-                      <button
-                        key={family}
-                        type="button"
-                        onClick={() =>
-                          setVariantFamilyFilters((current) => ({
-                            ...current,
-                            [groupKey]: family,
-                          }))
-                        }
-                        className={`rounded-lg px-3 py-2 text-sm font-black transition ${
-                          activeFamily === family
-                            ? "bg-[var(--green)] text-white"
-                            : "border border-[var(--line)] bg-[#edf1e8]"
-                        }`}
-                      >
-                        {family}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {useTwoLevels && (
-                  <p className="mb-2 mt-1 text-xs font-bold uppercase tracking-wide text-[var(--muted)]">
-                    BÆ°á»›c 2 Â· {activeFamily === "MÃ³c" ? "Chá»n cá»¡ mÃ³c" : `Chá»n chiá»u dÃ i cho ${activeFamily}`}
-                  </p>
-                )}
-                <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto pr-1">
-                  {visibleVariants.map((spec) => {
-                    const unknownMinimumWholesale = group.items.find(
-                      (item) =>
-                        item.variantSpec === spec &&
-                        item.priceType === "wholesale" &&
-                        item.packageNote.includes("ChÆ°a rÃµ sá»‘ lÆ°á»£ng tá»‘i thiá»ƒu"),
-                    );
-
-                    return (
-                      <button
-                        key={spec}
-                        onClick={() => setSelected({ name: group.name, spec })}
-                        className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-left text-sm font-bold transition hover:border-[var(--green)] hover:bg-[#f0f5eb]"
-                      >
-                        <span className="block">
-                          {useTwoLevels && activeFamily
-                            ? displaySpecification(variantChoiceLabel(spec, activeFamily))
-                            : displaySpecification(spec)}
-                        </span>
-                        {unknownMinimumWholesale && (
-                          <span className="mt-0.5 block whitespace-nowrap text-[11px] font-bold text-amber-700">
-                            GiÃ¡ sá»‰: {formatVnd(unknownMinimumWholesale.price)}/con
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </article>
-              );
-            })}
-            {!loading && shown.length === 0 && (
-              <div className="col-span-2 rounded-2xl border border-dashed border-[var(--line)] p-10 text-center">
-                <Package className="mx-auto mb-3" />
-                <b>ChÆ°a cÃ³ má»©c giÃ¡ phÃ¹ há»£p</b>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  Kiá»ƒm tra migration 004 hoáº·c thá»­ tá»« khÃ³a khÃ¡c.
-                </p>
-              </div>
-            )}
-          </div>
-        </section>
-        <p className="mt-8 text-center text-xs text-[var(--muted)]">
-          {synced
-            ? `Äá»“ng bá»™: ${new Date(synced).toLocaleString("vi-VN")}`
-            : "ChÆ°a cÃ³ dá»¯ liá»‡u Ä‘á»“ng bá»™"}
-        </p>
+        <p className="pos-sync-note">{synced ? "Đồng bộ dữ liệu: " + new Date(synced).toLocaleString("vi-VN") : "Đang chờ đồng bộ dữ liệu Supabase"}</p>
       </main>
-      {selected && (
+      {selected && detailOpen && (
         <div
           className="fixed inset-0 z-40 flex items-end justify-center bg-black/45 sm:items-center sm:p-5"
           onMouseDown={(event) => {
@@ -1058,7 +865,7 @@ export function PriceApp() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase text-[var(--green)]">
-                  Chá»n giÃ¡ cho hÃ³a Ä‘Æ¡n
+                  Chọn giá cho hóa đơn
                 </p>
                 <h2
                   id="price-dialog-title"
@@ -1070,9 +877,9 @@ export function PriceApp() {
                   type="button"
                   onClick={() => openCatalogEditor(recommended?.item)}
                   className="group mt-0.5 flex items-center gap-1.5 text-left text-[var(--muted)]"
-                  title="Báº¥m Ä‘á»ƒ sá»­a quy cÃ¡ch"
+                  title="Bấm để sửa quy cách"
                 >
-                  Quy cÃ¡ch:{" "}
+                  Quy cách:{" "}
                   <b className="text-[var(--ink)] group-hover:text-[var(--green)]">
                     {displaySpecification(selected.spec)}
                   </b>
@@ -1080,8 +887,8 @@ export function PriceApp() {
                 </button>
                 <p className="mt-1 text-sm font-bold text-amber-700">
                   {selectedSourcePages.length > 0
-                    ? `Äá»‘i chiáº¿u: Trang ${selectedSourcePages.join(", ")}`
-                    : "ChÆ°a cÃ³ sá»‘ trang nguá»“n"}
+                    ? `Đối chiếu: Trang ${selectedSourcePages.join(", ")}`
+                    : "Chưa có số trang nguồn"}
                 </p>
                 <div className="mt-2 flex max-w-[calc(100vw-7rem)] flex-nowrap gap-2 overflow-x-auto pb-1 sm:max-w-none">
                   {selectedSourceFiles.length > 0 && (
@@ -1109,18 +916,18 @@ export function PriceApp() {
                     onClick={() => openCatalogEditor(recommended?.item)}
                     className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-[var(--lime)] px-3 py-1.5 text-xs font-black text-[var(--ink)]"
                   >
-                    <Pencil size={14} /> Sá»­a giÃ¡ & thÃ´ng tin
+                    <Pencil size={14} /> Sửa giá & thông tin
                   </button>
                 </div>
                 {sourceImageError && (
                   <p role="alert" className="mt-2 text-xs font-bold text-red-700">
-                    KhÃ´ng má»Ÿ Ä‘Æ°á»£c áº£nh: {sourceImageError}
+                    Không mở được ảnh: {sourceImageError}
                   </p>
                 )}
               </div>
               <button
                 onClick={() => setSelected(null)}
-                aria-label="ÄÃ³ng"
+                aria-label="Đóng"
                 className="grid size-10 place-items-center rounded-full bg-[#edf1e8]"
               >
                 <X size={20} />
@@ -1129,8 +936,8 @@ export function PriceApp() {
             <div className="mt-5 grid gap-3">
               {selectedPrices.length === 0 && (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                  Quy cÃ¡ch nÃ y Ä‘Ã£ Ä‘Æ°á»£c nháº­p tá»« áº£nh nguá»“n nhÆ°ng giÃ¡ chÆ°a Ä‘á»§ rÃµ
-                  Ä‘á»ƒ ghi nháº­n. HÃ£y Ä‘á»‘i chiáº¿u áº£nh trÆ°á»›c khi bá»• sung giÃ¡.
+                  Quy cách này đã được nhập từ ảnh nguồn nhưng giá chưa đủ rõ
+                  để ghi nhận. Hãy đối chiếu ảnh trước khi bổ sung giá.
                 </p>
               )}
               {displayedPriceOptions.map((option, index) => (
@@ -1150,7 +957,7 @@ export function PriceApp() {
                     <button
                       onClick={() => setEditing(option.item.id)}
                       className="money flex items-center gap-1 text-xl font-black"
-                      aria-label={`Sá»­a giÃ¡ ${option.item.name}`}
+                      aria-label={`Sửa giá ${option.item.name}`}
                     >
                       {formatVnd(option.item.price)} <Pencil size={13} />
                     </button>
@@ -1179,7 +986,7 @@ export function PriceApp() {
                           ),
                         }))
                       }
-                      aria-label={`Giáº£m ${displayItemPackageName(option.item)}`}
+                      aria-label={`Giảm ${displayItemPackageName(option.item)}`}
                       className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#edf1e8] text-xl font-black text-[var(--green)]"
                     >
                       âˆ’
@@ -1193,7 +1000,7 @@ export function PriceApp() {
                         }))
                       }
                       inputMode="numeric"
-                      aria-label={`Sá»‘ lÆ°á»£ng ${displayItemPackageName(option.item)}`}
+                      aria-label={`Số lượng ${displayItemPackageName(option.item)}`}
                       className="h-11 min-w-0 flex-1 rounded-xl border-2 border-[var(--green)] bg-white text-center text-xl font-black"
                     />
                     <button
@@ -1204,21 +1011,21 @@ export function PriceApp() {
                           [option.item.priceId]: String(option.packageCount + 1),
                         }))
                       }
-                      aria-label={`TÄƒng ${displayItemPackageName(option.item)}`}
+                      aria-label={`Tăng ${displayItemPackageName(option.item)}`}
                       className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--green)] text-xl font-black text-white"
                     >
                       +
                     </button>
                   </div>
                   <p className="mt-1 text-center text-xs text-[var(--muted)]">
-                    {option.packageCount} Ã— {option.item.packageQuantity} ={" "}
+                    {option.packageCount} × {option.item.packageQuantity} ={" "}
                     <b>{option.requestedQuantity} {option.item.unit}</b>
                   </p>
                   {option.item.priceType === "wholesale" &&
-                    option.item.packageNote.includes("ChÆ°a rÃµ sá»‘ lÆ°á»£ng tá»‘i thiá»ƒu") && (
+                    option.item.packageNote.includes("Chưa rõ số lượng tối thiểu") && (
                       <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
-                        ChÆ°a rÃµ sá»‘ lÆ°á»£ng tá»‘i thiá»ƒu Ä‘á»ƒ Ã¡p dá»¥ng giÃ¡ sá»‰. Chá»‰ dÃ¹ng
-                        giÃ¡ nÃ y sau khi xÃ¡c nháº­n khÃ¡ch mua Ä‘á»§ sá»‘ lÆ°á»£ng.
+                        Chưa rõ số lượng tối thiểu để áp dụng giá sỉ. Chỉ dùng
+                        giá này sau khi xác nhận khách mua đủ số lượng.
                       </p>
                     )}
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--line)] pt-3">
@@ -1229,8 +1036,8 @@ export function PriceApp() {
                       className="rounded-xl bg-[var(--green)] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-400"
                     >
                       {option.eligible
-                        ? "ThÃªm vÃ o hÃ³a Ä‘Æ¡n"
-                        : "Nháº­p sá»‘ lÆ°á»£ng"}
+                        ? "Thêm vào hóa đơn"
+                        : "Nhập số lượng"}
                     </button>
                   </div>
                 </div>
@@ -1250,16 +1057,16 @@ export function PriceApp() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase text-[var(--green)]">
-                  Chá»‰nh sá»­a dá»¯ liá»‡u gá»‘c
+                  Chỉnh sửa dữ liệu gốc
                 </p>
                 <h2 id="catalog-editor-title" className="text-2xl font-black">
-                  Sá»­a giÃ¡ & thÃ´ng tin
+                  Sửa giá & thông tin
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setCatalogEditor(null)}
-                aria-label="ÄÃ³ng trÃ¬nh sá»­a"
+                aria-label="Đóng trình sửa"
                 className="grid size-10 place-items-center rounded-full bg-[#edf1e8]"
               >
                 <X size={20} />
@@ -1267,10 +1074,10 @@ export function PriceApp() {
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               {[
-                ["TÃªn nhÃ³m sáº£n pháº©m", "categoryName"],
-                ["TÃªn sáº£n pháº©m", "productName"],
-                ["TÃªn biáº¿n thá»ƒ", "variantDisplayName"],
-                ["ThÃ´ng tin / quy cÃ¡ch", "rawSpecification"],
+                ["Tên nhóm sản phẩm", "categoryName"],
+                ["Tên sản phẩm", "productName"],
+                ["Tên biến thể", "variantDisplayName"],
+                ["Thông tin / quy cách", "rawSpecification"],
               ].map(([label, field]) => (
                 <label key={field} className="text-sm font-bold">
                   {label}
@@ -1291,11 +1098,11 @@ export function PriceApp() {
             {catalogEditor.priceId !== null ? (
               <>
                 <h3 className="mt-7 border-t border-[var(--line)] pt-5 text-lg font-black">
-                  ÄÃ³ng gÃ³i vÃ  giÃ¡
+                  Đóng gói và giá
                 </h3>
                 <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <label className="text-sm font-bold">
-                    TÃªn Ä‘Ã³ng gÃ³i
+                    Tên đóng gói
                     <input
                       value={catalogEditor.packageName}
                       onChange={(event) =>
@@ -1309,7 +1116,7 @@ export function PriceApp() {
                     />
                   </label>
                   <label className="text-sm font-bold">
-                    Sá»‘ lÆ°á»£ng Ä‘Ã³ng gÃ³i
+                    Số lượng đóng gói
                     <input
                       value={catalogEditor.packageQuantity}
                       onChange={(event) =>
@@ -1324,7 +1131,7 @@ export function PriceApp() {
                     />
                   </label>
                   <label className="text-sm font-bold">
-                    ÄÆ¡n vá»‹ tÃ­nh
+                    Đơn vị tính
                     <input
                       value={catalogEditor.baseUnit}
                       onChange={(event) =>
@@ -1338,7 +1145,7 @@ export function PriceApp() {
                     />
                   </label>
                   <label className="text-sm font-bold">
-                    Loáº¡i giÃ¡
+                    Loại giá
                     <select
                       value={catalogEditor.priceType}
                       onChange={(event) =>
@@ -1350,13 +1157,13 @@ export function PriceApp() {
                       }
                       className="mt-1 h-11 w-full rounded-xl border border-[var(--line)] bg-white px-3 font-normal"
                     >
-                      <option value="retail">GiÃ¡ láº»</option>
-                      <option value="wholesale">GiÃ¡ sá»‰</option>
-                      <option value="dealer">GiÃ¡ Ä‘áº¡i lÃ½</option>
+                      <option value="retail">Giá lẻ</option>
+                      <option value="wholesale">Giá sỉ</option>
+                      <option value="dealer">Giá đại lý</option>
                     </select>
                   </label>
                   <label className="text-sm font-bold">
-                    Sá»‘ lÆ°á»£ng tá»‘i thiá»ƒu
+                    Số lượng tối thiểu
                     <input
                       value={catalogEditor.minimumQuantity}
                       onChange={(event) =>
@@ -1371,7 +1178,7 @@ export function PriceApp() {
                     />
                   </label>
                   <label className="text-sm font-bold">
-                    GiÃ¡ bÃ¡n (VND)
+                    Giá bán (VND)
                     <input
                       value={catalogEditor.amount}
                       onChange={(event) =>
@@ -1389,9 +1196,9 @@ export function PriceApp() {
               </>
             ) : (
               <p className="mt-6 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
-                Quy cÃ¡ch nÃ y chÆ°a cÃ³ giÃ¡. Báº¡n váº«n cÃ³ thá»ƒ sá»­a nhÃ³m, sáº£n pháº©m vÃ 
-                thÃ´ng tin biáº¿n thá»ƒ; chá»©c nÄƒng táº¡o giÃ¡ má»›i sáº½ cáº§n báº£ng giÃ¡ vÃ 
-                quy cÃ¡ch Ä‘Ã³ng gÃ³i riÃªng.
+                Quy cách này chưa có giá. Bạn vẫn có thể sửa nhóm, sản phẩm và
+                thông tin biến thể; chức năng tạo giá mới sẽ cần bảng giá và
+                quy cách đóng gói riêng.
               </p>
             )}
             {error && (
@@ -1405,7 +1212,7 @@ export function PriceApp() {
                 onClick={() => setCatalogEditor(null)}
                 className="rounded-xl border border-[var(--line)] px-5 py-2.5 font-bold"
               >
-                Há»§y
+                Hủy
               </button>
               <button
                 type="button"
@@ -1413,7 +1220,7 @@ export function PriceApp() {
                 disabled={savingCatalog}
                 className="rounded-xl bg-[var(--green)] px-5 py-2.5 font-bold text-white disabled:opacity-60"
               >
-                {savingCatalog ? "Äang lÆ°uâ€¦" : "LÆ°u táº¥t cáº£ thay Ä‘á»•i"}
+                {savingCatalog ? "Đang lưu…" : "Lưu tất cả thay đổi"}
               </button>
             </div>
           </section>
@@ -1435,51 +1242,52 @@ export function PriceApp() {
             <div className="flex items-start justify-between border-b border-[var(--line)] p-5">
               <div>
                 <p className="text-xs font-bold uppercase text-[var(--green)]">
-                  HÃ³a Ä‘Æ¡n táº¡m tÃ­nh
+                  Hóa đơn tạm tính
                 </p>
                 <h2 id="invoice-title" className="text-2xl font-black">
-                  {invoice.length} sáº£n pháº©m
+                  {activeInvoice.length} sản phẩm
                 </h2>
               </div>
               <button
                 onClick={() => setInvoiceOpen(false)}
-                aria-label="ÄÃ³ng hÃ³a Ä‘Æ¡n"
+                aria-label="Đóng hóa đơn"
                 className="grid size-10 place-items-center rounded-full bg-[#edf1e8]"
               >
                 <X />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-5">
-              {invoice.length === 0 ? (
+              {!loading && activeInvoice.length < invoice.length && <p role="alert" className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Một số mức giá đã hết hiệu lực hoặc không còn trong bảng giá hiện tại; chúng không được đưa vào báo giá. Hãy chọn lại sản phẩm.</p>}
+              {activeInvoice.length === 0 ? (
                 <div className="py-16 text-center">
                   <ShoppingCart className="mx-auto mb-3" />
-                  <b>HÃ³a Ä‘Æ¡n Ä‘ang trá»‘ng</b>
+                  <b>Hóa đơn đang trống</b>
                   <p className="mt-1 text-sm text-[var(--muted)]">
-                    TÃ¬m sáº£n pháº©m vÃ  chá»n â€œThÃªm vÃ o hÃ³a Ä‘Æ¡nâ€.
+                    Tìm sản phẩm và chọn “Thêm vào hóa đơn”.
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
+                <div className="invoice-lines overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
                   <table className="w-full min-w-[720px] border-collapse text-sm">
                     <thead className="bg-[#edf1e8] text-left text-xs uppercase text-[var(--muted)]">
                       <tr>
-                        <th className="px-3 py-3">Sáº£n pháº©m</th>
-                        <th className="px-3 py-3">Quy cÃ¡ch</th>
-                        <th className="px-3 py-3 text-right">Sá»‘ lÆ°á»£ng</th>
-                        <th className="px-3 py-3 text-right">ÄÆ¡n giÃ¡</th>
-                        <th className="px-3 py-3 text-right">ThÃ nh tiá»n</th>
+                        <th className="px-3 py-3">Sản phẩm</th>
+                        <th className="px-3 py-3">Quy cách</th>
+                        <th className="px-3 py-3 text-right">Số lượng</th>
+                        <th className="px-3 py-3 text-right">Đơn giá</th>
+                        <th className="px-3 py-3 text-right">Thành tiền</th>
                         <th className="w-10 px-2 py-3" />
                       </tr>
                     </thead>
                     <tbody>
-                      {invoice.map((line) => (
+                      {activeInvoice.map((line) => (
                         <tr key={line.key} className="border-t border-[var(--line)] align-top">
                           <td className="px-3 py-3 font-black">{line.item.name}</td>
                           <td className="px-3 py-3">
                             <b>{displaySpecification(line.item.variantSpec)}</b>
                             <p className="mt-0.5 whitespace-nowrap text-xs text-[var(--muted)]">
                               {line.item.priceType === "wholesale"
-                                ? `${line.packageCount} bá»‹ch Ã— ${line.item.packageQuantity} ${line.item.unit}`
+                                ? `${line.packageCount} bịch × ${line.item.packageQuantity} ${line.item.unit}`
                                 : `${line.packageCount} ${displayItemPackageName(line.item)}`}
                             </p>
                           </td>
@@ -1487,7 +1295,7 @@ export function PriceApp() {
                             {line.requestedQuantity} {line.item.unit}
                           </td>
                           <td className="money whitespace-nowrap px-3 py-3 text-right">
-                            {formatVnd(line.unitPrice ?? line.total / line.packageCount)}
+                            {formatVnd(line.item.price)}
                             <p className="text-xs text-[var(--muted)]">
                               /{displayItemPackageName(line.item)}
                             </p>
@@ -1502,7 +1310,7 @@ export function PriceApp() {
                                   current.filter((item) => item.key !== line.key),
                                 )
                               }
-                              aria-label={`XÃ³a ${line.item.name} khá»i hÃ³a Ä‘Æ¡n`}
+                              aria-label={`Xóa ${line.item.name} khỏi hóa đơn`}
                               className="text-red-600"
                             >
                               <Trash2 size={17} />
@@ -1517,13 +1325,15 @@ export function PriceApp() {
             </div>
             <footer className="border-t border-[var(--line)] p-5">
               <div className="mb-4 flex items-end justify-between">
-                <span className="font-bold">Tá»•ng cá»™ng</span>
+                <span className="font-bold">Tổng cộng</span>
                 <strong className="money text-3xl">
                   {formatVnd(
-                    invoice.reduce((sum, line) => sum + line.total, 0),
+                    activeInvoice.reduce((sum, line) => sum + line.total, 0),
                   )}
                 </strong>
               </div>
+              {quoteMessage && <p role="status" className="mb-3 rounded-lg bg-[#e9eee8] p-3 text-sm text-[var(--green)]">{quoteMessage}</p>}
+              <button type="button" onClick={copyQuote} disabled={activeInvoice.length === 0} className="mb-2 h-12 w-full rounded-xl bg-[var(--lime)] font-bold text-[var(--ink)] disabled:opacity-50">Sao chép báo giá</button>
               <button
                 onClick={() => {
                   setInvoiceOpen(false);
@@ -1532,7 +1342,7 @@ export function PriceApp() {
                     () =>
                       document
                         .querySelector<HTMLInputElement>(
-                          '[aria-label="TÃ¬m váº­t tÆ°"]',
+                          '[aria-label="Tìm vật tư"]',
                         )
                         ?.focus(),
                     0,
@@ -1540,38 +1350,25 @@ export function PriceApp() {
                 }}
                 className="h-12 w-full rounded-xl bg-[var(--green)] font-bold text-white"
               >
-                ThÃªm sáº£n pháº©m khÃ¡c
+                Thêm sản phẩm khác
               </button>
-              {invoice.length > 0 && (
+              {activeInvoice.length > 0 && (
                 <button
                   onClick={() => setInvoice([])}
                   className="mt-2 h-10 w-full text-sm font-bold text-red-700"
                 >
-                  XÃ³a hÃ³a Ä‘Æ¡n
+                  Xóa hóa đơn
                 </button>
               )}
             </footer>
           </aside>
         </div>
       )}
-      <nav className="fixed inset-x-0 bottom-0 flex justify-around border-t bg-white py-2 sm:hidden">
-        {[
-          [Home, "Trang chá»§"],
-          [Layers3, "Danh má»¥c"],
-          [History, "Lá»‹ch sá»­"],
-        ].map(([Icon, label]) => {
-          const I = Icon as typeof Home;
-          return (
-            <span
-              key={label as string}
-              className="flex flex-col items-center text-[10px]"
-            >
-              <I size={20} />
-              {label as string}
-            </span>
-          );
-        })}
+      <nav className="mobile-nav sm:hidden" aria-label="Điều hướng chính">
+        <Link href="/" className="active" aria-current="page"><Home size={20} />Tra giá</Link>
+        <a href="/questions"><Search size={20} />Hỏi giá</a>
+        <button type="button" onClick={() => setInvoiceOpen(true)}><ShoppingCart size={20} />Hóa đơn {activeInvoice.length > 0 ? `(${activeInvoice.length})` : ""}</button>
       </nav>
-    </div>
+   </div>
   );
 }
