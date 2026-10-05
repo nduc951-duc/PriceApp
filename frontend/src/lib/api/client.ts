@@ -7,7 +7,7 @@ export class ApiRequestError extends Error {
 }
 
 /** Calls the configured API with the current caller session. */
-export async function requestApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function requestApi<T>(path: string, init: RequestInit = {}, options: { acceptedStatuses?: readonly number[] } = {}): Promise<T> {
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!base) throw new ApiRequestError(503, "API_NOT_CONFIGURED");
   const baseUrl = new URL(base);
@@ -26,7 +26,9 @@ export async function requestApi<T>(path: string, init: RequestInit = {}): Promi
     let code = "API_REQUEST_FAILED";
     try {
       const body: unknown = await response.json();
-      if (typeof body === "object" && body !== null && "error" in body) {
+      const hasError = typeof body === "object" && body !== null && "error" in body;
+      if (options.acceptedStatuses?.includes(response.status) && !hasError) return body as T;
+      if (hasError) {
         const failure = body.error;
         if (typeof failure === "object" && failure !== null && "code" in failure && typeof failure.code === "string") code = failure.code;
       }

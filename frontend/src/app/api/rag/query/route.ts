@@ -96,12 +96,11 @@ export async function POST(request: Request) {
       : await generateGroundedAnswer({ question, evidence: uniqueEvidence });
     const sources = [...new Map(uniqueEvidence.filter((item) => item.page !== null).map((item) => [item.page!, { pageNumber: item.page!, excerpt: item.content.slice(0, 500) }])).values()];
     const trace = { question, chunkIds: chunks.map((chunk) => chunk.id), variantIds: items.map((item) => item.id), priceIds: items.flatMap((item) => item.prices.map((price) => price.id)), answer };
-    console.info("[rag-query]", JSON.stringify(trace));
     return ragJson({ answer, items, sources, retrieval: { vectorChunks: chunks.length, lexicalProducts: lexicalIds.length, embeddingModel: model, trace } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Không thể xử lý câu hỏi RAG.";
     const status = /chưa được cấu hình/.test(message) ? 503 : 500;
-    return ragJson({ error: message }, { status });
+    return ragJson({ error: status === 503 ? "Dịch vụ RAG chưa được cấu hình." : "Không thể xử lý câu hỏi RAG." }, { status });
   }
 }
 

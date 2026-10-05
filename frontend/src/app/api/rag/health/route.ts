@@ -8,8 +8,8 @@ export const maxDuration = 90;
 
 type Check = { ok: boolean; detail: string; count?: number; dimensions?: number; model?: string; fingerprint?: string };
 
-function failure(error: unknown): Check {
-  return { ok: false, detail: error instanceof Error ? error.message : "Không kiểm tra được dịch vụ." };
+function failure(): Check {
+  return { ok: false, detail: "Không kiểm tra được dịch vụ." };
 }
 
 export async function GET(request: Request) {
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
         ]);
         if (pageError || chunkError) throw new Error(pageError?.message ?? chunkError?.message ?? "Không đọc được schema RAG.");
         return { ok: true, detail: `${pages ?? 0} trang đã duyệt; ${chunks ?? 0} chunk đã lưu.`, count: chunks ?? 0 };
-      } catch (error) { return failure(error); }
+      } catch { return failure(); }
     })(),
     (async (): Promise<Check> => {
       try {
@@ -36,14 +36,14 @@ export async function GET(request: Request) {
           .update(`${providerName()}:${model}:${vector.map((value) => value.toFixed(5)).join(",")}`)
           .digest("hex").slice(0, 16);
         return { ok: true, detail: "Embedding hoạt động.", model, dimensions: vector.length, fingerprint };
-      } catch (error) { return failure(error); }
+      } catch { return failure(); }
     })(),
     (async (): Promise<Check> => {
       try {
         const model = chatModel();
         await generateGroundedAnswer({ question: "Trả lời một từ: OK", evidence: [] });
         return { ok: true, detail: "Chat model hoạt động.", model };
-      } catch (error) { return failure(error); }
+      } catch { return failure(); }
     })(),
   ]);
 

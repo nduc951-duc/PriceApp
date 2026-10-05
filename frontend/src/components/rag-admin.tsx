@@ -3,17 +3,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Activity, ArrowLeft, BookOpenCheck, LoaderCircle, Save, Sparkles } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { chunkText, normalizeChunkSource } from "@/lib/rag/chunking";
+import { requestApi, ApiRequestError } from "@/lib/api/client";
 
 type Page = { sourcePageId: number; pageNumber: number | null; title: string; extractedText: string; reviewStatus: "draft" | "approved" | "rejected"; revision: number };
 type Health = { ok: boolean; provider: string; database: { ok: boolean; detail: string }; embedding: { ok: boolean; detail: string; model?: string; dimensions?: number; fingerprint?: string }; chat: { ok: boolean; detail: string; model?: string } };
 type IndexProgress = { runId: number; status: "running" | "failed" | "completed"; checkpoint: number; chunks: number; indexed: number; reused: number; removed: number; embeddingModel: string; contentHash: string };
-async function apiFetch(path: string, token: string, init?: RequestInit) {
-  return fetch(path, { ...init, cache: "no-store", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers } });
+type PreviewChunk = { index: number; content: string; start: number; end: number };
+function errorMessage(cause: unknown, fallback: string) {
+  if (cause instanceof ApiRequestError && cause.status === 401) return "Vui lòng đăng nhập lại.";
+  if (cause instanceof ApiRequestError && cause.status === 403) return "Bạn không có quyền quản trị RAG.";
+  return fallback;
 }
 export function RagAdmin() {
-  const [supabase] = useState(() => createClient());
   const [pages, setPages] = useState<Page[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -25,28 +26,31 @@ export function RagAdmin() {
   const [health, setHealth] = useState<Health | null>(null);
   const selected = pages.find((page) => page.sourcePageId === selectedId) ?? null;
   const approvedCount = useMemo(() => pages.filter((page) => page.reviewStatus === "approved").length, [pages]);
-  const chunkPreview = useMemo(() => {
-    const text = selected?.extractedText ?? "";
-    return { source: normalizeChunkSource(text), chunks: chunkText(text) };
-  }, [selected?.extractedText]);
+  const [preview, setPreview] = useState<{ text: string; chunks: PreviewChunk[] }>({ text: "", chunks: [] });
+  const previewText = selected?.extractedText ?? "";
+  const chunkPreview = preview.text === previewText ? preview.chunks : [];
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (!previewText.trim()) { setPreview({ text: previewText, chunks: [] }); return; }
+      void requestApi<{ source: string; chunks: PreviewChunk[] }>("/api/v1/admin/rag/preview", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ extractedText: previewText }), signal: controller.signal,
+      }).then(body => { if (active) setPreview({ text: previewText, chunks: body.chunks }); })
+        .catch(cause => { if (active) setError(errorMessage(cause, "Không xem trước được đoạn tìm kiếm. Hãy thử lại sau.")); });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); controller.abort(); };
+  }, [previewText]);
 
   const loadPages = useCallback(async () => {
-    if (!supabase) { setError("Chưa cấu hình Supabase."); return; }
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) { setError("Vui lòng đăng nhập lại."); return; }
-    const response = await apiFetch("/api/rag/pages", token);
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error ?? "Không tải được trang nguồn.");
-    setPages(body.pages as Page[]);
+    const body = await requestApi<{ pages: Page[] }>("/api/v1/admin/rag/pages");
+    setPages(body.pages);
     setSelectedId((current) => current ?? body.pages?.[0]?.sourcePageId ?? null);
-    const runResponse = await apiFetch("/api/rag/index", token);
-    if (runResponse.ok) {
-      const runBody = await runResponse.json() as { run: IndexProgress | null };
-      setIndexProgress(runBody.run);
-    }
-  }, [supabase]);
-  useEffect(() => { const timer = window.setTimeout(() => { void loadPages().catch((cause) => setError(cause instanceof Error ? cause.message : "Lỗi tải trang.")); }, 0); return () => window.clearTimeout(timer); }, [loadPages]);
+    const runBody = await requestApi<{ run: IndexProgress | null }>("/api/v1/admin/rag/index");
+    setIndexProgress(runBody.run);
+  }, []);
+  useEffect(() => { const timer = window.setTimeout(() => { void loadPages().catch((cause) => setError(errorMessage(cause, "Không tải được trang nguồn."))); }, 0); return () => window.clearTimeout(timer); }, [loadPages]);
   useEffect(() => {
     if (!dirty) return;
     const warnBeforeLeave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -67,53 +71,36 @@ export function RagAdmin() {
     setPages((items) => items.map((page) => page.sourcePageId === selected.sourcePageId ? { ...page, ...patch } : page));
   }
   async function save(reviewStatus: "draft" | "approved" | "rejected") {
-    if (!supabase || !selected) return;
+    if (!selected) return;
     setBusy(true); setError(""); setNotice("");
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error("Vui lòng đăng nhập lại.");
-      const response = await apiFetch("/api/rag/pages", token, { method: "PUT", body: JSON.stringify({ ...selected, reviewStatus }) });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Không lưu được nội dung.");
+      const body = await requestApi<{ revision: number }>("/api/v1/admin/rag/pages", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...selected, reviewStatus }) });
       updateSelected({ reviewStatus, revision: body.revision }); setDirty(false); setNotice(reviewStatus === "approved" ? "Bản chép đã được duyệt. Hãy tạo lại embedding cho revision mới." : reviewStatus === "rejected" ? "Đã thu hồi cả trang nguồn; mọi chunk gắn trang này không còn được truy xuất." : "Bản nháp đã lưu; chunk OCR cũ không còn được truy xuất.");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Không lưu được."); }
+    } catch (cause) { setError(errorMessage(cause, "Không lưu được nội dung. Hãy kiểm tra dữ liệu và thử lại.")); }
     finally { setBusy(false); }
   }
   async function buildIndex() {
     if (dirty) { setError("Hãy lưu hoặc bỏ thay đổi trước khi tạo embedding."); return; }
-    if (!supabase) return;
     setBusy(true); setError(""); setNotice("");
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error("Vui lòng đăng nhập lại.");
       let progress: IndexProgress;
       do {
-        const response = await apiFetch("/api/rag/index", token, { method: "POST" });
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error ?? "Tạo embedding thất bại.");
-        progress = body as IndexProgress;
+        progress = await requestApi<IndexProgress>("/api/v1/admin/rag/index", { method: "POST" });
         setIndexProgress(progress);
       } while (progress.status === "running");
       setIndexed(progress.chunks);
       setNotice(`${progress.indexed} chunk mới, ${progress.reused} giữ lại, ${progress.removed} đã xóa. Model: ${progress.embeddingModel}. Hash: ${progress.contentHash.slice(0, 16)}.`);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Tạo embedding thất bại."); }
+    } catch (cause) { setError(errorMessage(cause, "Tạo embedding thất bại. Hãy kiểm tra cấu hình và thử lại.")); }
     finally { setBusy(false); }
   }
 
   async function checkHealth() {
-    if (!supabase) return;
     setBusy(true); setError(""); setHealth(null);
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error("Vui lòng đăng nhập lại.");
-      const response = await apiFetch("/api/rag/health", token);
-      const body = await response.json();
-      if (response.status === 401 || response.status === 403) throw new Error(body.error ?? "Không có quyền kiểm tra RAG.");
-      setHealth(body as Health);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Không kiểm tra được RAG."); }
+      const body = await requestApi<Health>("/api/v1/admin/rag/health", {}, { acceptedStatuses: [503] });
+      if (!body?.database || !body.embedding || !body.chat) throw new Error("Invalid health response");
+      setHealth(body);
+    } catch (cause) { setError(errorMessage(cause, "Không kiểm tra được RAG. Hãy thử lại sau.")); }
     finally { setBusy(false); }
   }
 
@@ -133,7 +120,7 @@ export function RagAdmin() {
     <div className="mt-6 grid gap-5 lg:grid-cols-[250px_1fr]">
       <nav aria-label="Trang sổ giá" className="grid content-start grid-cols-2 gap-2 lg:grid-cols-1">{pages.map((page) => <button key={page.sourcePageId} onClick={() => selectPage(page.sourcePageId)} className={`flex items-center justify-between rounded-xl border p-3 text-left ${selectedId === page.sourcePageId ? "border-[var(--green)] bg-emerald-50" : "border-[var(--line)] bg-white"}`}><span className="font-bold">Trang {String(page.pageNumber ?? page.sourcePageId).padStart(2, "0")}</span><span className={`text-xs ${page.reviewStatus === "approved" ? "text-emerald-700" : "text-amber-800"}`}>{page.reviewStatus === "approved" ? "Đã duyệt" : page.reviewStatus === "rejected" ? "Đã thu hồi" : "Bản nháp"}</span></button>)}</nav>
       {selected ? <section className="rounded-2xl border border-[var(--line)] bg-white p-4 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-black">Trang {String(selected.pageNumber ?? selected.sourcePageId).padStart(2, "0")}</h2><a className="mt-1 inline-flex items-center gap-2 text-sm font-bold text-[var(--green)] underline" href={`/source-pages/page-${String(selected.pageNumber ?? selected.sourcePageId).padStart(2, "0")}.jpg`} target="_blank" rel="noreferrer"><BookOpenCheck size={16}/> Mở ảnh riêng</a></div><span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900">Giá trong SQL không được embedding</span></div><div className="mt-4 grid gap-5 xl:grid-cols-[minmax(280px,.85fr)_minmax(380px,1.15fr)]"><figure className="min-w-0"><figcaption className="mb-2 text-sm font-bold">Ảnh sổ gốc · Trang {String(selected.pageNumber ?? selected.sourcePageId).padStart(2, "0")}</figcaption><div className="relative h-[55vh] min-h-80 overflow-auto rounded-xl border border-[var(--line)] bg-[#f3f1e9] xl:sticky xl:top-4 xl:h-[calc(100vh-9rem)]"><Image src={`/source-pages/page-${String(selected.pageNumber ?? selected.sourcePageId).padStart(2, "0")}.jpg`} alt={`Ảnh sổ giá trang ${selected.pageNumber ?? selected.sourcePageId}`} width={1200} height={2000} unoptimized className="h-full w-full object-contain"/></div></figure><div className="min-w-0"><label className="block text-sm font-bold">Tên tài liệu<input value={selected.title} onChange={(event) => updateSelected({ title: event.target.value })} className="mt-2 h-11 w-full rounded-lg border border-[var(--line)] px-3 font-normal" maxLength={200}/></label><label className="mt-4 block text-sm font-bold">Bản chép/OCR đã đối chiếu<textarea value={selected.extractedText} onChange={(event) => updateSelected({ extractedText: event.target.value, reviewStatus: selected.reviewStatus === "approved" ? "draft" : selected.reviewStatus })} rows={18} maxLength={100000} placeholder="Nhập nội dung đọc được từ trang sổ. Ghi mỗi mặt hàng/nhóm giá thành một dòng; giữ tên, quy cách, ghi chú và đơn vị. Không chép số tiền; giá sẽ được lấy riêng từ bảng prices." className="mt-2 w-full rounded-xl border border-[var(--line)] p-3 font-mono text-sm leading-6"/><span className="mt-1 block text-right text-xs text-[var(--muted)]">{selected.extractedText.length.toLocaleString("vi-VN")} / 100.000 ký tự</span></label><div className="mt-4 flex flex-wrap gap-2"><button disabled={busy} onClick={() => void save("draft")} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line)] px-4 py-2 font-bold"><Save size={16}/> Lưu bản nháp</button><button disabled={busy || !selected.extractedText.trim()} onClick={() => void save("approved")} className="min-h-11 rounded-lg bg-[var(--green)] px-4 py-2 font-bold text-white disabled:opacity-50">Duyệt bản chép</button><button disabled={busy || selected.reviewStatus === "rejected"} onClick={() => void save("rejected")} className="min-h-11 rounded-lg border border-red-200 px-4 py-2 font-bold text-red-800">Thu hồi cả trang</button></div></div></div></section> : <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed border-[var(--line)] bg-white p-6 text-center text-sm text-[var(--muted)]">Đang tải các trang nguồn…</div>}
-      {selected && <section aria-label="Xem trước đoạn tìm kiếm" className="rounded-2xl border border-[var(--line)] bg-white p-4 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">Xem trước đoạn tìm kiếm</h3><span className="text-xs text-[var(--muted)]">{chunkPreview.chunks.length} đoạn · văn bản chuẩn hóa</span></div>{chunkPreview.chunks.length ? <ol className="mt-3 grid gap-3">{chunkPreview.chunks.map((chunk) => <li key={chunk.index} className="rounded-lg border border-[var(--line)] bg-[#f8f9f6] p-3"><p className="text-xs font-bold text-[var(--muted)]">Đoạn {chunk.index + 1} · ký tự {chunk.start}–{chunk.end}</p><pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-6">{chunkPreview.source.slice(chunk.start, chunk.end)}</pre></li>)}</ol> : <p className="mt-2 text-sm text-[var(--muted)]">Chưa có nội dung để chia đoạn. Nhập và đối chiếu bản chép với ảnh.</p>}</section>}
+      {selected && <section aria-label="Xem trước đoạn tìm kiếm" className="rounded-2xl border border-[var(--line)] bg-white p-4 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">Xem trước đoạn tìm kiếm</h3><span className="text-xs text-[var(--muted)]">{chunkPreview.length} đoạn · văn bản chuẩn hóa</span></div>{chunkPreview.length ? <ol className="mt-3 grid gap-3">{chunkPreview.map((chunk) => <li key={chunk.index} className="rounded-lg border border-[var(--line)] bg-[#f8f9f6] p-3"><p className="text-xs font-bold text-[var(--muted)]">Đoạn {chunk.index + 1} · ký tự {chunk.start}–{chunk.end}</p><pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-6">{chunk.content}</pre></li>)}</ol> : <p className="mt-2 text-sm text-[var(--muted)]">Chưa có nội dung để chia đoạn. Nhập và đối chiếu bản chép với ảnh.</p>}</section>}
     </div>
     <p className="mt-5 text-xs leading-5 text-[var(--muted)]">Chunking chia văn bản theo dòng/ngữ nghĩa, giới hạn khoảng 1.100 ký tự mỗi chunk và chồng lấn 160 ký tự để giữ ngữ cảnh. Giá hiện hành luôn được đọc riêng từ PostgreSQL khi người dùng hỏi.</p>
   </main>;

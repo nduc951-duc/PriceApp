@@ -152,10 +152,8 @@ export async function POST(request: Request) {
       removed: finished?.removed ?? 0, chunks: drafts.length, pages: pages.length,
       variants: new Set(drafts.filter((chunk) => chunk.product_variant_id).map((chunk) => chunk.product_variant_id)).size,
       embeddingModel: model, embeddingDimensions: EMBEDDING_DIMENSIONS, contentHash };
-    console.info("[rag-index]", JSON.stringify(summary));
     return ragJson(summary);
-  } catch (error) {
-    console.error("[rag-index] failed", error instanceof Error ? error.message : "unknown");
+  } catch {
     return ragJson({ error: "Lập chỉ mục thất bại. Kiểm tra cấu hình và thử tiếp sau khi xử lý lỗi." }, { status: 500 });
   }
 }

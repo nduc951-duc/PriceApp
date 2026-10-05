@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const auth = await authenticateRagRequest(request, ["owner"]);
   if (!auth.ok) return ragJson({ error: auth.error }, { status: auth.status });
   const { data, error } = await auth.client.from("rag_page_texts").select("source_page_id,title,extracted_text,review_status,revision,source_pages!inner(page_number)").order("source_page_id");
-  if (error) return ragJson({ error: error.message }, { status: 500 });
+  if (error) return ragJson({ error: "Không tải được trang nguồn." }, { status: 500 });
   const pages = (data ?? []).map((row) => {
     const source = row.source_pages as unknown as { page_number: number | null };
     return { sourcePageId: row.source_page_id, pageNumber: source.page_number, title: row.title, extractedText: row.extracted_text, reviewStatus: row.review_status, revision: row.revision };
@@ -34,7 +34,7 @@ export async function PUT(request: Request) {
       review_status: reviewStatus, reviewed_by: reviewStatus === "approved" ? auth.user.id : null,
       reviewed_at: reviewStatus === "approved" ? new Date().toISOString() : null, updated_at: new Date().toISOString(),
     }, { onConflict: "source_page_id" }).select("revision").single();
-    if (error) return ragJson({ error: error.message }, { status: 500 });
+    if (error) return ragJson({ error: "Không lưu được trang nguồn." }, { status: 500 });
     return ragJson({ saved: true, reviewStatus, revision: data.revision });
   } catch {
     return ragJson({ error: "Không đọc được dữ liệu gửi lên." }, { status: 400 });

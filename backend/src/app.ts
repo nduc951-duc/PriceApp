@@ -8,6 +8,7 @@ import { requireRole } from "./middleware/require-role.js";
 import type { SupabaseFactory } from "./repositories/supabase-client.js";
 import { registerHealthRoutes } from "./routes/health.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
+import { registerRagRoutes } from "./routes/v1/rag.routes.js";
 
 export function buildApp(options: { env: AppEnv; supabaseFactory: SupabaseFactory; logStream?: Writable }): FastifyInstance {
   const app = Fastify({ logger: { level: "info", stream: options.logStream, serializers: { req: req => ({ id: req.id }), res: res => ({ statusCode: res.statusCode }) } }, logController: new LogController({ disableRequestLogging: true }) });
@@ -25,7 +26,7 @@ export function buildApp(options: { env: AppEnv; supabaseFactory: SupabaseFactor
     }
     reply.header("access-control-allow-origin", origin);
     reply.header("vary", "Origin");
-    reply.header("access-control-allow-methods", "GET, POST, PATCH, DELETE, OPTIONS");
+    reply.header("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
     reply.header("access-control-allow-headers", "Authorization, Content-Type");
     if (request.method === "OPTIONS") reply.code(204).send();
   });
@@ -33,5 +34,6 @@ export function buildApp(options: { env: AppEnv; supabaseFactory: SupabaseFactor
   app.decorate("requireRole", requireRole);
   registerHealthRoutes(app);
   registerAuthRoutes(app);
+  registerRagRoutes(app);
   return app;
 }

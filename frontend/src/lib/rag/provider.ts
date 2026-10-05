@@ -22,8 +22,7 @@ function model(env: string) {
   return value;
 }
 async function readError(response: Response) {
-  const body = await response.text().catch(() => "");
-  return `AI provider trả lỗi HTTP ${response.status}${body ? `: ${body.slice(0, 400)}` : ""}`;
+  return `AI provider trả lỗi HTTP ${response.status}`;
 }
 function validateVectors(value: unknown, expected: number): number[][] {
   if (!Array.isArray(value) || value.length !== expected) throw new Error("Embedding provider trả về sai số vector.");

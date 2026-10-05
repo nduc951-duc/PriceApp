@@ -3,7 +3,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, LoaderCircle, MessageCircle, Search, Sparkles } from "lucide-react";
 import { formatVnd } from "@/features/pricing/validation";
-import { createClient } from "@/lib/supabase/client";
+import { requestApi, ApiRequestError } from "@/lib/api/client";
 
 type Price = { id: number; amount: number; priceType: string; minimumQuantity: number; packagingName: string; packageQuantity: number; packageNote: string; unit: string; priceList: string | null; supplier: string | null; verificationStatus: string };
 type Item = { id: number; productName: string; category: string; variant: string; verificationStatus: string; sourcePages: number[]; prices: Price[] };
@@ -12,7 +12,6 @@ const examples = ["Giá sỉ tắc kê sắt 8 ly là bao nhiêu?", "Bulong 8 ly
 const priceTypeLabel = (value: string) => value === "wholesale" ? "Giá sỉ" : value === "dealer" ? "Giá đại lý" : "Giá lẻ";
 
 export function PriceQuestionAssistant() {
-  const [supabase] = useState(() => createClient());
   const [question, setQuestion] = useState("");
   const [result, setResult] = useState<Answer | null>(null);
   const [searching, setSearching] = useState(false);
@@ -20,19 +19,15 @@ export function PriceQuestionAssistant() {
 
   async function ask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!question.trim() || !supabase) return;
+    if (!question.trim()) return;
     setSearching(true); setError(""); setResult(null);
     try {
-      const { data, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !data.session?.access_token) throw new Error("Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.");
-      const response = await fetch("/api/rag/query", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` },
+      const body = await requestApi<Answer>("/api/v1/rag/query", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: question.trim() }),
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Không truy xuất được dữ liệu.");
-      setResult(body as Answer);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể gửi câu hỏi."); }
+      setResult(body);
+    } catch (cause) { setError(cause instanceof ApiRequestError && cause.status === 401 ? "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại." : "Không thể truy xuất dữ liệu. Hãy thử lại sau."); }
     finally { setSearching(false); }
   }
 

@@ -65,6 +65,7 @@ describe("RAG query uses current SQL prices", () => {
     expect(first.answer).toContain("10.000");
     expect(second.answer).toContain("12.000");
     expect(mocks.generateAnswer).not.toHaveBeenCalled();
+    expect(console.info).not.toHaveBeenCalled();
   });
 
   it("reports missing current prices without asking the model to invent one", async () => {
@@ -87,5 +88,13 @@ describe("RAG query uses current SQL prices", () => {
     expect(body.sources).toEqual([]);
     expect(body.answer).toContain("chưa tìm thấy");
     expect(mocks.generateAnswer).not.toHaveBeenCalled();
+  });
+
+  it("does not expose provider errors to the caller", async () => {
+    mocks.authenticate.mockResolvedValue({ ok: true, client: clientWithPrice(() => 10000) });
+    mocks.embedTexts.mockRejectedValueOnce(new Error("private-token raw-OCR private-user"));
+    const response = await ask();
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "Không thể xử lý câu hỏi RAG." });
   });
 });

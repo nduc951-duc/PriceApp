@@ -43,7 +43,7 @@ describe("RAG health diagnostics", () => {
     const body = await response.json();
     expect(response.status).toBe(503);
     expect(body.database.ok).toBe(true);
-    expect(body.embedding).toMatchObject({ ok: false, detail: "model offline" });
+    expect(body.embedding).toMatchObject({ ok: false, detail: "Không kiểm tra được dịch vụ." });
     expect(body.chat.ok).toBe(true);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
   });
