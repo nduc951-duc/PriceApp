@@ -1,0 +1,26 @@
+import { expect, it } from "vitest";
+import { buildApp } from "./app.js";
+import type { SupabaseFactory } from "./repositories/supabase-client.js";
+
+const env = { supabaseUrl: "https://project.supabase.co", supabasePublishableKey: "public-key", allowedOrigins: ["https://shop.example"], port: 3001 };
+const unusedFactory = (() => { throw new Error("unexpected auth"); }) as SupabaseFactory;
+
+it("serves a public health check with a request ID", async () => {
+  const app = buildApp({ env, supabaseFactory: unusedFactory });
+  const response = await app.inject({ method: "GET", url: "/api/v1/health" });
+  expect(response.statusCode).toBe(200);
+  expect(response.json()).toEqual({ status: "ok" });
+  expect(response.headers["x-request-id"]).toMatch(/^req-/);
+  await app.close();
+});
+
+it("allows only an exact configured CORS origin", async () => {
+  const app = buildApp({ env, supabaseFactory: unusedFactory });
+  const allowed = await app.inject({ method: "OPTIONS", url: "/api/v1/me", headers: { origin: "https://shop.example", "access-control-request-method": "GET" } });
+  expect(allowed.statusCode).toBe(204);
+  expect(allowed.headers["access-control-allow-origin"]).toBe("https://shop.example");
+  const denied = await app.inject({ method: "GET", url: "/api/v1/health", headers: { origin: "https://shop.example.evil" } });
+  expect(denied.statusCode).toBe(403);
+  expect(denied.headers["access-control-allow-origin"]).toBeUndefined();
+  await app.close();
+});

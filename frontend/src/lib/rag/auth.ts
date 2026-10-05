@@ -1,6 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
-import { inspectAccessToken } from "@/lib/rag/auth-diagnostics";
 // The project does not ship generated Supabase Database types; API tables are added via SQL migrations.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -21,15 +20,6 @@ export async function authenticateRagRequest(request: Request, allowed: RagRole[
   });
   const { data: userData, error: userError } = await client.auth.getUser(token);
   if (userError || !userData.user) {
-    if (process.env.NODE_ENV !== "production") {
-      const errorDetails = userError as { name?: unknown; status?: unknown; code?: unknown } | null;
-      console.warn("[rag-auth] access token rejected", {
-        ...inspectAccessToken(token, url),
-        errorName: typeof errorDetails?.name === "string" ? errorDetails.name : null,
-        errorStatus: typeof errorDetails?.status === "number" ? errorDetails.status : null,
-        errorCode: typeof errorDetails?.code === "string" ? errorDetails.code : null,
-      });
-    }
     return { ok: false, status: 401, error: "Không xác thực được phiên đăng nhập." };
   }
   const { data: profile, error: profileError } = await client.from("profiles").select("role").eq("id", userData.user.id).maybeSingle();

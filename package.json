@@ -2,14 +2,14 @@
   "name": "price-app",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["frontend"],
+  "workspaces": ["frontend", "backend"],
   "scripts": {
     "dev": "npm run dev --workspace frontend",
-    "build": "npm run build --workspace frontend",
+    "build": "npm run build --workspaces",
     "start": "npm run start --workspace frontend",
-    "lint": "npm run lint --workspace frontend",
-    "typecheck": "npm run typecheck --workspace frontend",
-    "test": "npm test --workspace frontend",
+    "lint": "npm run lint --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm test --workspaces",
     "test:e2e": "npm run test:e2e --workspace frontend"
   }
 }
