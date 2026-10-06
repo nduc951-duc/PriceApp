@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --env-file=.env.local src/server.ts",
+    "dev": "tsx --env-file=.env.local src/server.ts",
+    "dev:watch": "tsx watch --env-file=.env.local src/server.ts",
     "start": "node --env-file=.env.local dist/server.js",
     "build": "tsc -p tsconfig.json",
     "openapi:generate": "tsx scripts/generate-contract.ts",

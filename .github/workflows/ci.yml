@@ -1,0 +1,66 @@
+name: PriceApp CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --workspace frontend
+      - run: npm run typecheck --workspace frontend
+      - run: npm test --workspace frontend
+      - run: npm run build --workspace frontend
+
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --workspace backend
+      - run: npm run typecheck --workspace backend
+      - run: npm test --workspace backend
+      - run: npm run openapi:check
+      - run: npm run build --workspace backend
+
+  e2e:
+    name: Authenticated desktop and mobile E2E
+    if: ${{ github.event_name != 'pull_request' && vars.PRICEAPP_E2E_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+        env:
+          PRICEAPP_E2E_ENABLED: "true"
+          PRICEAPP_E2E_PROJECT_REF: ${{ secrets.PRICEAPP_E2E_PROJECT_REF }}
+          PRICEAPP_E2E_SUPABASE_URL: ${{ secrets.PRICEAPP_E2E_SUPABASE_URL }}
+          PRICEAPP_E2E_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PRICEAPP_E2E_SUPABASE_PUBLISHABLE_KEY }}
+          PRICEAPP_E2E_OWNER_EMAIL: ${{ secrets.PRICEAPP_E2E_OWNER_EMAIL }}
+          PRICEAPP_E2E_OWNER_PASSWORD: ${{ secrets.PRICEAPP_E2E_OWNER_PASSWORD }}
+          PRICEAPP_E2E_EMPLOYEE_EMAIL: ${{ secrets.PRICEAPP_E2E_EMPLOYEE_EMAIL }}
+          PRICEAPP_E2E_EMPLOYEE_PASSWORD: ${{ secrets.PRICEAPP_E2E_EMPLOYEE_PASSWORD }}

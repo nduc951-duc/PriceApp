@@ -24,3 +24,23 @@ it("allows only an exact configured CORS origin", async () => {
   expect(denied.headers["access-control-allow-origin"]).toBeUndefined();
   await app.close();
 });
+
+it("returns request IDs on denied origins without echoing bearer tokens", async () => {
+  let output = "";
+  const app = buildApp({
+    env,
+    supabaseFactory: unusedFactory,
+    logStream: { write(chunk: string | Uint8Array) { output += String(chunk); return true; } } as NodeJS.WritableStream,
+  });
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/v1/me",
+    headers: { origin: "https://shop.example.evil", authorization: "Bearer e2e-secret-token" },
+  });
+  expect(response.statusCode).toBe(403);
+  expect(response.headers["x-request-id"]).toMatch(/^req-/);
+  expect(response.json().requestId).toBe(response.headers["x-request-id"]);
+  expect(response.body).not.toContain("e2e-secret-token");
+  expect(output).not.toContain("e2e-secret-token");
+  await app.close();
+});

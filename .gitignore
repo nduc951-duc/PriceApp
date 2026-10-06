@@ -43,6 +43,9 @@ yarn-error.log*
 next-env.d.ts
 !.env.example
 dev-server*.log
+**/playwright-report/
+**/test-results/
+**/playwright/.cache/
 /supabase/.temp/
 /.worktrees/
 /.superpowers/sdd/
