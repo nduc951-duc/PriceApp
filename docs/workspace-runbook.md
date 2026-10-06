@@ -37,15 +37,17 @@ E2E is deliberately disabled unless `PRICEAPP_E2E_ENABLED=true` and all isolated
 
 The project ref must match the Supabase URL hostname. The known production project ref is rejected by the Playwright config. E2E servers use isolated ports 3210/4210 by default, never reuse an existing server, and suppress Playwright traces so credential entry is not retained in artifacts. Quote tests use an in-memory catalog fixture. Price conflict requests are intercepted before reaching Supabase; offline edits assert that no write request is sent. The RAG UI test stubs its query response so it does not call a provider. The employee role test performs only catalog and admin reads. Auth sign-in is the only Supabase Auth operation performed by these tests.
 
-## Legacy RAG rollback point
+The authenticated cases have not passed in this environment because no isolated test project/account is configured. Keep the legacy Next RAG routes and helpers until the isolated desktop and mobile E2E suite passes against the backend path. Do not use the application's configured production Supabase project for this gate.
 
-The legacy Next handlers and their server-only helper/tests were kept through backend parity testing. The rollback source is commit `e8260d2` (the Task 7 base). After Task 7 has been reviewed, create a local annotated tag pointing at that commit:
+## Legacy RAG cutover gate and rollback point
+
+The legacy Next handlers, server-only helpers, and tests remain in the worktree. Their removal is pending successful authenticated E2E on an isolated Supabase test project; backend parity alone does not satisfy that gate. The rollback source is commit `e8260d2` (the Task 7 base). After the E2E gate and parent review, create a local annotated tag pointing at that commit before deleting the old surface:
 
 ```powershell
 git tag -a priceapp-pre-rag-cutover e8260d2 -m "PriceApp before removing legacy Next RAG routes"
 ```
 
-To restore the complete legacy surface on a recovery branch, including imported helpers and their tests:
+If a later cutover needs to be reverted, restore the complete legacy surface on a recovery branch, including imported helpers and tests:
 
 ```powershell
 git restore --source=priceapp-pre-rag-cutover --staged --worktree -- frontend/src/app/api/rag frontend/src/lib/rag
