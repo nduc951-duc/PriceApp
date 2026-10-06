@@ -14,7 +14,11 @@ import { registerSourceFilesRoutes } from "./routes/v1/source-files.routes.js";
 import { registerPricesRoutes } from "./routes/v1/prices.routes.js";
 
 export function buildApp(options: { env: AppEnv; supabaseFactory: SupabaseFactory; logStream?: Writable }): FastifyInstance {
-  const app = Fastify({ logger: { level: "info", stream: options.logStream, serializers: { req: req => ({ id: req.id }), res: res => ({ statusCode: res.statusCode }) } }, logController: new LogController({ disableRequestLogging: true }) });
+  const app = Fastify({
+    ajv: { customOptions: { coerceTypes: false } },
+    logger: { level: "info", stream: options.logStream, serializers: { req: req => ({ id: req.id }), res: res => ({ statusCode: res.statusCode }) } },
+    logController: new LogController({ disableRequestLogging: true }),
+  });
   installErrorHandler(app);
   app.setNotFoundHandler((request, reply) => {
     reply.code(404).send({ error: { code: "NOT_FOUND", message: "Route not found" }, requestId: request.id });

@@ -27,13 +27,63 @@ it("uses the current session bearer token for each API request", async () => {
   vi.unstubAllGlobals();
 });
 
+it("uses the refreshed session token on the next request instead of caching a token", async () => {
+  const getSession = vi.fn()
+    .mockResolvedValueOnce({ data: { session: { access_token: "old-token" } }, error: null })
+    .mockResolvedValueOnce({ data: { session: { access_token: "refreshed-token" } }, error: null });
+  mocks.createClient.mockReturnValue({ auth: { getSession } });
+  const fetcher = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    await requestApi("/api/v1/health");
+    await requestApi("/api/v1/health");
+    expect((fetcher.mock.calls[0][1].headers as Headers).get("Authorization")).toBe("Bearer old-token");
+    expect((fetcher.mock.calls[1][1].headers as Headers).get("Authorization")).toBe("Bearer refreshed-token");
+    expect(getSession).toHaveBeenCalledTimes(2);
+  } finally { vi.unstubAllGlobals(); }
+});
+
 it("rejects missing sessions without sending a request", async () => {
   mocks.createClient.mockReturnValue({ auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }) } });
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
-  await expect(requestApi("/api/v1/me")).rejects.toThrow("Authentication required");
+  await expect(requestApi("/api/v1/me")).rejects.toMatchObject({ status: 401, message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." });
   expect(fetcher).not.toHaveBeenCalled();
   vi.unstubAllGlobals();
+});
+
+it.each([
+  [401, "UNAUTHORIZED", "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."],
+  [403, "FORBIDDEN", "Tài khoản của bạn chưa được cấp quyền thực hiện thao tác này."],
+  [409, "VERSION_CONFLICT", "Dữ liệu vừa được người khác cập nhật. Hãy tải lại rồi thử lại."],
+  [422, "VALIDATION_ERROR", "Thông tin chưa hợp lệ. Vui lòng kiểm tra lại."],
+  [503, "SERVICE_UNAVAILABLE", "Dịch vụ đang tạm thời gián đoạn. Vui lòng thử lại sau."],
+])("maps HTTP %i errors to safe Vietnamese messages", async (status, code, message) => {
+  mocks.createClient.mockReturnValue({ auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: "private-token" } }, error: null }) } });
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code, message: "sensitive backend detail" } }), { status })));
+  try {
+    await expect(requestApi("/api/v1/me")).rejects.toMatchObject({ status, code, message });
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it("does not log request tokens or bodies and sends JSON negotiation headers", async () => {
+  mocks.createClient.mockReturnValue({ auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: "private-token" } }, error: null }) } });
+  const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    await requestApi("/api/v1/me", { method: "POST", body: "sensitive-body" });
+    const headers = fetcher.mock.calls[0][1].headers as Headers;
+    expect(headers.get("Authorization")).toBe("Bearer private-token");
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(fetcher.mock.calls[0][1].cache).toBe("no-store");
+    expect(log).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals(); log.mockRestore(); error.mockRestore();
+  }
 });
 
 it("returns health diagnostics for an explicitly accepted 503 while ordinary requests still reject", async () => {
@@ -52,7 +102,7 @@ it("keeps authorization errors rejected when only health unavailability is accep
   mocks.createClient.mockReturnValue({ auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: "private-token" } }, error: null }) } });
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "FORBIDDEN", message: "private-details" } }), { status: 403 })));
   try {
-    await expect(requestApi("/api/v1/admin/rag/health", {}, { acceptedStatuses: [503], validateAcceptedResponse: isRagHealthDiagnostics })).rejects.toMatchObject({ status: 403, code: "FORBIDDEN", message: "FORBIDDEN" });
+    await expect(requestApi("/api/v1/admin/rag/health", {}, { acceptedStatuses: [503], validateAcceptedResponse: isRagHealthDiagnostics })).rejects.toMatchObject({ status: 403, code: "FORBIDDEN", message: "Tài khoản của bạn chưa được cấp quyền thực hiện thao tác này." });
   } finally { vi.unstubAllGlobals(); }
 });
 

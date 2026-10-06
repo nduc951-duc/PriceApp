@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "start": "node dist/server.js",
+    "dev": "tsx watch --env-file=.env.local src/server.ts",
+    "start": "node --env-file=.env.local dist/server.js",
     "build": "tsc -p tsconfig.json",
+    "openapi:generate": "tsx scripts/generate-contract.ts",
+    "api:types": "tsx scripts/generate-contract.ts",
+    "openapi:check": "tsx scripts/generate-contract.ts --check",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

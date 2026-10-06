@@ -1,24 +1,18 @@
 import { requestApi } from "./client";
+import type { ApiPaths } from "./generated/api-types";
 
-export type PriceUpdateInput = { priceId: number; amount: number; expectedVersion: number; reason: string };
-export type PriceWriteResult = { amount: number; version: number };
-export type PriceUpdateResult = PriceWriteResult & { historyId: number };
-export type CatalogUpdateInput = {
-  categoryId: number; categoryName: string; productId: number; productName: string;
-  variantId: number; variantDisplayName: string; rawSpecification: string;
-  packagingId: number | null; packageName: string | null; packageQuantity: number | null; baseUnit: string | null;
-  priceId: number | null; priceType: "retail" | "wholesale" | "dealer" | null;
-  minimumQuantity: number | null; amount: number | null; expectedVersion: number | null;
-};
-export type CatalogUpdateResult = {
-  ok: true;
-  category: { id: number; name: string };
-  product: { id: number; name: string };
-  variant: { id: number; displayName: string; rawSpecification: string };
-  packaging: null | { id: number; name: string; quantity: number; baseUnit: string };
-  price: null | { id: number; amount: number; version: number; priceType: "retail" | "wholesale" | "dealer"; minimumQuantity: number };
-};
-export type PriceUndoInput = { historyId: number; expectedVersion: number };
+type PriceUpdateBody = ApiPaths["/api/v1/prices/{priceId}/update"]["post"]["requestBody"]["content"]["application/json"];
+type PriceUpdateResponse = ApiPaths["/api/v1/prices/{priceId}/update"]["post"]["responses"]["200"]["content"]["application/json"];
+type CatalogUpdateBody = ApiPaths["/api/v1/catalog/update"]["post"]["requestBody"]["content"]["application/json"];
+type CatalogUpdateResponse = ApiPaths["/api/v1/catalog/update"]["post"]["responses"]["200"]["content"]["application/json"];
+type PriceUndoBody = ApiPaths["/api/v1/prices/undo"]["post"]["requestBody"]["content"]["application/json"];
+type PriceUndoResponse = ApiPaths["/api/v1/prices/undo"]["post"]["responses"]["200"]["content"]["application/json"];
+export type PriceUpdateInput = PriceUpdateBody & { priceId: number };
+export type PriceWriteResult = PriceUndoResponse;
+export type PriceUpdateResult = PriceUpdateResponse;
+export type CatalogUpdateInput = CatalogUpdateBody;
+export type CatalogUpdateResult = CatalogUpdateResponse;
+export type PriceUndoInput = PriceUndoBody;
 
 export class OfflineWriteError extends Error {
   constructor() { super("Offline writes are disabled"); }

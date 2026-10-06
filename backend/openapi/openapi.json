@@ -1,0 +1,4350 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PriceApp API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000"
+    }
+  ],
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Kiểm tra trạng thái API",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "ok"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "getCurrentUser",
+        "summary": "Lấy tài khoản và vai trò",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "userId": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "owner",
+                        "editor",
+                        "viewer"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "userId",
+                    "role"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/catalog": {
+      "get": {
+        "operationId": "getCatalog",
+        "summary": "Đọc danh mục và giá",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "categoryId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "productId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "variantId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "spec": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "sourcePages": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "sourceFiles": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "categoryId",
+                          "productId",
+                          "variantId",
+                          "name",
+                          "category",
+                          "spec",
+                          "displayName",
+                          "sourcePages",
+                          "sourceFiles"
+                        ]
+                      }
+                    },
+                    "prices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "priceId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "categoryId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "productId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "variantId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "packagingId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "variantDisplayName": {
+                            "type": "string"
+                          },
+                          "spec": {
+                            "type": "string"
+                          },
+                          "variantSpec": {
+                            "type": "string"
+                          },
+                          "packageName": {
+                            "type": "string"
+                          },
+                          "packageQuantity": {
+                            "type": "number"
+                          },
+                          "packageNote": {
+                            "type": "string"
+                          },
+                          "priceType": {
+                            "type": "string"
+                          },
+                          "minimumQuantity": {
+                            "type": "number"
+                          },
+                          "price": {
+                            "type": "number"
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "supplier": {
+                            "type": "string"
+                          },
+                          "sourcePages": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "sourceFiles": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "verified",
+                              "needs_review",
+                              "unreadable"
+                            ]
+                          },
+                          "version": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "priceId",
+                          "categoryId",
+                          "productId",
+                          "variantId",
+                          "packagingId",
+                          "name",
+                          "category",
+                          "variantDisplayName",
+                          "spec",
+                          "variantSpec",
+                          "packageName",
+                          "packageQuantity",
+                          "packageNote",
+                          "priceType",
+                          "minimumQuantity",
+                          "price",
+                          "unit",
+                          "supplier",
+                          "sourcePages",
+                          "sourceFiles",
+                          "status",
+                          "version"
+                        ]
+                      }
+                    },
+                    "syncedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "entries",
+                    "prices",
+                    "syncedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/source-files/signed-url": {
+      "post": {
+        "operationId": "createSourceSignedUrl",
+        "summary": "Tạo URL ảnh nguồn có thời hạn",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "signedUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "expiresIn": {
+                      "type": "number",
+                      "const": 300
+                    }
+                  },
+                  "required": [
+                    "signedUrl",
+                    "expiresIn"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "storagePath": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  }
+                },
+                "required": [
+                  "storagePath"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prices/{priceId}/update": {
+      "post": {
+        "operationId": "updatePrice",
+        "summary": "Cập nhật giá có kiểm toán",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "amount": {
+                      "type": "number"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "historyId": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "amount",
+                    "version",
+                    "historyId"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 999999999999
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "amount",
+                  "expectedVersion",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "priceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/catalog/update": {
+      "post": {
+        "operationId": "updateCatalogItem",
+        "summary": "Cập nhật mặt hàng",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "category": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ]
+                    },
+                    "product": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ]
+                    },
+                    "variant": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "displayName": {
+                          "type": "string"
+                        },
+                        "rawSpecification": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "displayName",
+                        "rawSpecification"
+                      ]
+                    },
+                    "packaging": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "baseUnit": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "quantity",
+                            "baseUnit"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "price": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "amount": {
+                              "type": "number"
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "priceType": {
+                              "type": "string",
+                              "enum": [
+                                "retail",
+                                "wholesale",
+                                "dealer"
+                              ]
+                            },
+                            "minimumQuantity": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "amount",
+                            "version",
+                            "priceType",
+                            "minimumQuantity"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "category",
+                    "product",
+                    "variant",
+                    "packaging",
+                    "price"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "categoryId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "categoryName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "productId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "productName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "variantId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "variantDisplayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "rawSpecification": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "packagingId": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "packageName": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "packageQuantity": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "baseUnit": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "priceId": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "priceType": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "retail",
+                          "wholesale",
+                          "dealer"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "minimumQuantity": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "amount": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 999999999999
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "expectedVersion": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "categoryId",
+                  "categoryName",
+                  "productId",
+                  "productName",
+                  "variantId",
+                  "variantDisplayName",
+                  "rawSpecification",
+                  "packagingId",
+                  "packageName",
+                  "packageQuantity",
+                  "baseUnit",
+                  "priceId",
+                  "priceType",
+                  "minimumQuantity",
+                  "amount",
+                  "expectedVersion"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prices/undo": {
+      "post": {
+        "operationId": "undoPrice",
+        "summary": "Hoàn tác giá có kiểm toán",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "amount": {
+                      "type": "number"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "amount",
+                    "version"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "historyId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "historyId",
+                  "expectedVersion"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rag/query": {
+      "post": {
+        "operationId": "queryKnowledgeBase",
+        "summary": "Tra cứu tài liệu và giá",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "answer": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "retrieval": {
+                      "type": "object",
+                      "properties": {
+                        "vectorChunks": {
+                          "type": "number"
+                        },
+                        "lexicalProducts": {
+                          "type": "number"
+                        },
+                        "embeddingModel": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "vectorChunks",
+                        "lexicalProducts",
+                        "embeddingModel"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "answer",
+                    "items",
+                    "sources",
+                    "retrieval"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "question"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/rag/pages": {
+      "get": {
+        "operationId": "listRagPages",
+        "summary": "Liệt kê trang nguồn",
+        "tags": [
+          "RAG Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pages": {
+                      "type": "array",
+                      "items": {}
+                    }
+                  },
+                  "required": [
+                    "pages"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-role": [
+          "owner"
+        ]
+      },
+      "put": {
+        "operationId": "saveRagPage",
+        "summary": "Lưu trạng thái duyệt trang",
+        "tags": [
+          "RAG Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "reviewStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "saved",
+                    "reviewStatus",
+                    "revision"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-role": [
+          "owner"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sourcePageId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "extractedText": {
+                    "type": "string"
+                  },
+                  "reviewStatus": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "approved",
+                      "rejected"
+                    ]
+                  }
+                },
+                "required": [
+                  "sourcePageId",
+                  "title",
+                  "extractedText",
+                  "reviewStatus"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/rag/index": {
+      "get": {
+        "operationId": "getRagIndex",
+        "summary": "Lấy tiến độ lập chỉ mục",
+        "tags": [
+          "RAG Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "anyOf": [
+                        {},
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "run"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-role": [
+          "owner"
+        ]
+      },
+      "post": {
+        "operationId": "buildRagIndex",
+        "summary": "Lập chỉ mục tài liệu",
+        "tags": [
+          "RAG Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runId": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "checkpoint": {
+                      "type": "number"
+                    },
+                    "indexed": {
+                      "type": "number"
+                    },
+                    "reused": {
+                      "type": "number"
+                    },
+                    "removed": {
+                      "type": "number"
+                    },
+                    "chunks": {
+                      "type": "number"
+                    },
+                    "pages": {
+                      "type": "number"
+                    },
+                    "variants": {
+                      "type": "number"
+                    },
+                    "embeddingModel": {
+                      "type": "string"
+                    },
+                    "embeddingDimensions": {
+                      "type": "number"
+                    },
+                    "contentHash": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "runId",
+                    "status",
+                    "checkpoint",
+                    "indexed",
+                    "reused",
+                    "removed",
+                    "chunks",
+                    "pages",
+                    "variants",
+                    "embeddingModel",
+                    "embeddingDimensions",
+                    "contentHash"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-role": [
+          "owner"
+        ]
+      }
+    },
+    "/api/v1/admin/rag/health": {
+      "get": {
+        "operationId": "getRagHealth",
+        "summary": "Kiểm tra dịch vụ RAG",
+        "tags": [
+          "RAG Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "database": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "detail": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "number"
+                        },
+                        "dimensions": {
+                          "type": "number"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "fingerprint": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "detail"
+                      ]
+                    },
+                    "embedding": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "detail": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "number"
+                        },
+                        "dimensions": {
+                          "type": "number"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "fingerprint": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "detail"
+                      ]
+                    },
+                    "chat": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "detail": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "number"
+                        },
+                        "dimensions": {
+                          "type": "number"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "fingerprint": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "detail"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "provider",
+                    "database",
+                    "embedding",
+                    "chat"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Tạm thời không sẵn sàng hoặc chẩn đoán dịch vụ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "database": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "detail": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "number"
+                        },
+                        "dimensions": {
+                          "type": "number"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "fingerprint": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "detail"
+                      ]
+                    },
+                    "embedding": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "detail": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "number"
+                        },
+                        "dimensions": {
+                          "type": "number"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "fingerprint": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "detail"
+                      ]
+                    },
+                    "chat": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "detail": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "number"
+                        },
+                        "dimensions": {
+                          "type": "number"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "fingerprint": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "detail"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "provider",
+                    "database",
+                    "embedding",
+                    "chat"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-role": [
+          "owner"
+        ]
+      }
+    },
+    "/api/v1/admin/rag/preview": {
+      "post": {
+        "operationId": "previewRagPage",
+        "summary": "Xem trước phân đoạn văn bản",
+        "tags": [
+          "RAG Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "chunks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "number"
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "number"
+                          },
+                          "end": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "content",
+                          "start",
+                          "end"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "chunks"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-role": [
+          "owner"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "extractedText": {
+                    "type": "string",
+                    "maxLength": 100000
+                  }
+                },
+                "required": [
+                  "extractedText"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

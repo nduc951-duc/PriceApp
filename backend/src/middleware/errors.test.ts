@@ -27,3 +27,13 @@ it("does not expose an unexpected error message", async () => {
   expect(writes.join("")).not.toMatch(/private-token|private@example\.com|private-user-id/);
   await app.close();
 });
+
+it("maps Fastify schema validation failures to a safe 400 response", async () => {
+  const app = buildApp({ env, supabaseFactory: unusedFactory });
+  app.post("/invalid-body", { schema: { body: { type: "object", required: ["name"], properties: { name: { type: "string" } } } } }, async () => ({ ok: true }));
+  const response = await app.inject({ method: "POST", url: "/invalid-body", payload: { private: "request detail" } });
+  expect(response.statusCode).toBe(400);
+  expect(response.json()).toEqual({ error: { code: "INVALID_INPUT", message: "Invalid request body" }, requestId: response.headers["x-request-id"] });
+  expect(response.body).not.toContain("request detail");
+  await app.close();
+});

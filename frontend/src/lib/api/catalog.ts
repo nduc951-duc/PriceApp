@@ -1,17 +1,9 @@
 import { requestApi } from "./client";
+import type { ApiPaths } from "./generated/api-types";
 
-export type CatalogEntry = {
-  categoryId: number; productId: number; variantId: number; name: string; category: string;
-  spec: string; displayName: string; sourcePages: number[]; sourceFiles: string[];
-};
-export type CatalogPrice = {
-  id: number; priceId: number; categoryId: number; productId: number; variantId: number;
-  packagingId: number; name: string; category: string; variantDisplayName: string;
-  spec: string; variantSpec: string; packageName: string; packageQuantity: number;
-  packageNote: string; priceType: string; minimumQuantity: number; price: number;
-  unit: string; supplier: string; sourcePages: number[]; sourceFiles: string[];
-  status: "verified" | "needs_review" | "unreadable"; version: number;
-};
-export type CatalogResponse = { entries: CatalogEntry[]; prices: CatalogPrice[]; syncedAt: string };
+type CatalogContract = ApiPaths["/api/v1/catalog"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CatalogEntry = CatalogContract["entries"][number];
+export type CatalogPrice = CatalogContract["prices"][number];
+export type CatalogResponse = CatalogContract;
 
 export const fetchCatalog = () => requestApi<CatalogResponse>("/api/v1/catalog");

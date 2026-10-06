@@ -5,6 +5,9 @@
   "workspaces": ["frontend", "backend"],
   "scripts": {
     "dev": "npm run dev --workspace frontend",
+    "openapi:generate": "npm run openapi:generate --workspace backend",
+    "api:types": "npm run api:types --workspace backend",
+    "openapi:check": "npm run openapi:check --workspace backend",
     "build": "npm run build --workspaces",
     "start": "npm run start --workspace frontend",
     "lint": "npm run lint --workspaces",
