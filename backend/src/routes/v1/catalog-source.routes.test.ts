@@ -49,10 +49,20 @@ it("signs only a valid private bucket object for 300 seconds through caller clie
 });
 
 it("does not expose storage policy errors or create a public fallback", async () => {
-  const { app } = appFor({ message: "private user-id and storage secret" });
+  const { app } = appFor({ status: 403, message: "private user-id and storage secret" });
   try {
     const response = await app.inject({ method: "POST", url: "/api/v1/source-files/signed-url", headers: auth, payload: { storagePath: "page.jpg" } });
     expect(response.statusCode).toBe(403);
     expect(response.body).not.toMatch(/user-id|storage secret/);
+  } finally { await app.close(); }
+});
+
+it.each([503, 429])("reports transient Storage status %s as safe unavailability", async status => {
+  const { app } = appFor({ status, message: "private upstream details" });
+  try {
+    const response = await app.inject({ method: "POST", url: "/api/v1/source-files/signed-url", headers: auth, payload: { storagePath: "page.jpg" } });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ error: { code: "INTERNAL_ERROR", message: "Source file service unavailable" } });
+    expect(response.body).not.toContain("private upstream details");
   } finally { await app.close(); }
 });
