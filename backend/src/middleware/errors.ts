@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-export type ApiErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "AUTH_UNAVAILABLE" | "INTERNAL_ERROR" | "INVALID_INPUT" | "SOURCE_CHANGED" | "RAG_UNAVAILABLE";
+export type ApiErrorCode = "UNAUTHORIZED" | "FORBIDDEN" | "AUTH_UNAVAILABLE" | "INTERNAL_ERROR" | "INVALID_INPUT" | "CONFLICT" | "NOT_FOUND" | "SOURCE_CHANGED" | "RAG_UNAVAILABLE";
 
 export class ApiError extends Error {
   constructor(public readonly statusCode: number, public readonly code: ApiErrorCode, message: string) {

@@ -19,12 +19,12 @@ import {
   X,
 } from "lucide-react";
 import { cacheSnapshot, readSnapshot } from "@/features/offline/cache";
-import { formatVnd, priceSchema } from "@/features/pricing/validation";
+import { formatVnd, priceSchema, priceWriteErrorMessage } from "@/features/pricing/validation";
 import { selectBestPrice } from "@/features/pricing/select-price";
 import { matchesCatalogQuery } from "@/features/search/parser";
-import { createClient } from "@/lib/supabase/client";
 import { fetchCatalog } from "@/lib/api/catalog";
 import { fetchSourceSignedUrl } from "@/lib/api/source-files";
+import { updateCatalogItem, updatePrice, undoPrice } from "@/lib/api/prices";
 
 type Item = {
   id: number;
@@ -150,7 +150,6 @@ function displayPriceType(item: Item) {
 
 const recent = ["bulong 8ly 3f", "tac ke 6x50", "day cap inox 6 ly"];
 export function PriceApp() {
-  const [supabase] = useState(() => createClient());
   const [items, setItems] = useState<Item[]>([]);
   const [catalogEntries, setCatalogEntries] = useState<CatalogEntry[]>([]);
   const [query, setQuery] = useState("");
@@ -182,7 +181,7 @@ export function PriceApp() {
     addEventListener("online", updateNetwork);
     addEventListener("offline", updateNetwork);
     async function load() {
-      if (!navigator.onLine || !supabase) {
+      if (!navigator.onLine) {
         const cached = await readSnapshot<Item[]>("catalog");
         if (cached) {
           setItems(cached.data);
@@ -227,7 +226,7 @@ export function PriceApp() {
       removeEventListener("online", updateNetwork);
       removeEventListener("offline", updateNetwork);
     };
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -518,190 +517,102 @@ export function PriceApp() {
 
   async function saveCatalogEditor() {
     const form = catalogEditor;
-    if (!form || !supabase || savingCatalog) return;
+    if (!form || savingCatalog) return;
     if (!navigator.onLine) {
-      setError("Đang ngoại tuyến: chỉ có thể xem bảng giá đã lưu. Hãy kết nối mạng để sửa giá.");
+      setError("Đang ngoại tuyến: chỉ xem được bảng giá đã lưu. Hãy kết nối mạng để sửa giá.");
       return;
     }
     setSavingCatalog(true);
     setError("");
-    const { data, error: updateError } = await supabase.rpc(
-      "update_catalog_item",
-      {
-        p_category_id: form.categoryId,
-        p_category_name: form.categoryName.trim(),
-        p_product_id: form.productId,
-        p_product_name: form.productName.trim(),
-        p_variant_id: form.variantId,
-        p_variant_display_name: form.variantDisplayName.trim(),
-        p_raw_specification: form.rawSpecification.trim(),
-        p_packaging_id: form.packagingId,
-        p_package_name: form.packagingId ? form.packageName.trim() : null,
-        p_package_quantity: form.packagingId
-          ? Number(form.packageQuantity)
-          : null,
-        p_base_unit: form.packagingId ? form.baseUnit.trim() : null,
-        p_price_id: form.priceId,
-        p_price_type: form.priceId ? form.priceType : null,
-        p_minimum_quantity: form.priceId
-          ? Number(form.minimumQuantity)
-          : null,
-        p_amount: form.priceId
-          ? Number(form.amount.replace(/[^\d.]/g, ""))
-          : null,
-        p_expected_version: form.expectedVersion,
-      },
-    );
-    setSavingCatalog(false);
-    if (updateError) {
-      setError(
-        updateError.message.includes("owner_required")
-          ? "Chỉ tài khoản chủ cửa hàng mới được sửa toàn bộ thông tin."
-          : updateError.message.includes("duplicate key")
-            ? "Tên vừa nhập đang trùng với một dữ liệu đã có."
-            : `Không lưu được: ${updateError.message}`,
-      );
+    let result;
+    try {
+      result = await updateCatalogItem({
+        categoryId: form.categoryId,
+        categoryName: form.categoryName.trim(),
+        productId: form.productId,
+        productName: form.productName.trim(),
+        variantId: form.variantId,
+        variantDisplayName: form.variantDisplayName.trim(),
+        rawSpecification: form.rawSpecification.trim(),
+        packagingId: form.packagingId,
+        packageName: form.packagingId ? form.packageName.trim() : null,
+        packageQuantity: form.packagingId ? Number(form.packageQuantity) : null,
+        baseUnit: form.packagingId ? form.baseUnit.trim() : null,
+        priceId: form.priceId,
+        priceType: form.priceId ? form.priceType as "retail" | "wholesale" | "dealer" : null,
+        minimumQuantity: form.priceId ? Number(form.minimumQuantity) : null,
+        amount: form.priceId ? Number(form.amount.replace(/[^\d.]/g, "")) : null,
+        expectedVersion: form.expectedVersion,
+      }, navigator.onLine);
+    } catch (writeError) {
+      setError(priceWriteErrorMessage(writeError));
+      setSavingCatalog(false);
       return;
     }
-    const result = data as unknown as { price_version?: number } | null;
+    setSavingCatalog(false);
     const updateItem = (item: Item): Item => ({
       ...item,
-      category:
-        item.categoryId === form.categoryId ? form.categoryName.trim() : item.category,
+      category: item.categoryId === form.categoryId ? form.categoryName.trim() : item.category,
       name: item.productId === form.productId ? form.productName.trim() : item.name,
-      variantDisplayName:
-        item.variantId === form.variantId
-          ? form.variantDisplayName.trim()
-          : item.variantDisplayName,
-      variantSpec:
-        item.variantId === form.variantId
-          ? form.rawSpecification.trim()
-          : item.variantSpec,
-      packageName:
-        item.packagingId === form.packagingId ? form.packageName.trim() : item.packageName,
-      packageQuantity:
-        item.packagingId === form.packagingId
-          ? Number(form.packageQuantity)
-          : item.packageQuantity,
+      variantDisplayName: item.variantId === form.variantId ? form.variantDisplayName.trim() : item.variantDisplayName,
+      variantSpec: item.variantId === form.variantId ? form.rawSpecification.trim() : item.variantSpec,
+      packageName: item.packagingId === form.packagingId ? form.packageName.trim() : item.packageName,
+      packageQuantity: item.packagingId === form.packagingId ? Number(form.packageQuantity) : item.packageQuantity,
       unit: item.packagingId === form.packagingId ? form.baseUnit.trim() : item.unit,
-      priceType: item.priceId === form.priceId ? form.priceType : item.priceType,
-      minimumQuantity:
-        item.priceId === form.priceId
-          ? Number(form.minimumQuantity)
-          : item.minimumQuantity,
-      price:
-        item.priceId === form.priceId
-          ? Number(form.amount.replace(/[^\d.]/g, ""))
-          : item.price,
-      version:
-        item.priceId === form.priceId
-          ? (result?.price_version ?? item.version + 1)
-          : item.version,
+      priceType: item.priceId === form.priceId ? (result.price?.priceType ?? item.priceType) : item.priceType,
+      minimumQuantity: item.priceId === form.priceId ? (result.price?.minimumQuantity ?? item.minimumQuantity) : item.minimumQuantity,
+      price: item.priceId === form.priceId ? (result.price?.amount ?? item.price) : item.price,
+      version: item.priceId === form.priceId ? (result.price?.version ?? item.version) : item.version,
     });
     setItems((current) => current.map(updateItem));
-    setInvoice((current) =>
-      current.map((line) => {
-        const item = updateItem(line.item);
-        return {
-          ...line,
-          item,
-          unitPrice: item.price,
-          total: line.packageCount * item.price,
-        };
-      }),
-    );
-    setCatalogEntries((current) =>
-      current.map((entry) => ({
-        ...entry,
-        category:
-          entry.categoryId === form.categoryId
-            ? form.categoryName.trim()
-            : entry.category,
-        name:
-          entry.productId === form.productId
-            ? form.productName.trim()
-            : entry.name,
-        displayName:
-          entry.variantId === form.variantId
-            ? form.variantDisplayName.trim()
-            : entry.displayName,
-        spec:
-          entry.variantId === form.variantId
-            ? form.rawSpecification.trim()
-            : entry.spec,
-      })),
-    );
-    setSelected({
-      name: form.productName.trim(),
-      spec: form.rawSpecification.trim(),
-    });
+    setInvoice((current) => current.map((line) => {
+      const item = updateItem(line.item);
+      return { ...line, item, unitPrice: item.price, total: line.packageCount * item.price };
+    }));
+    setCatalogEntries((current) => current.map((entry) => ({
+      ...entry,
+      category: entry.categoryId === form.categoryId ? form.categoryName.trim() : entry.category,
+      name: entry.productId === form.productId ? form.productName.trim() : entry.name,
+      displayName: entry.variantId === form.variantId ? form.variantDisplayName.trim() : entry.displayName,
+      spec: entry.variantId === form.variantId ? form.rawSpecification.trim() : entry.spec,
+    })));
+    setSelected({ name: form.productName.trim(), spec: form.rawSpecification.trim() });
     setCatalogEditor(null);
   }
 
   async function save(itemId: number, raw: string) {
     if (!navigator.onLine) {
-      setError("Đang ngoại tuyến: chỉ có thể xem bảng giá đã lưu. Hãy kết nối mạng để sửa giá.");
+      setError("Đang ngoại tuyến: chỉ xem được bảng giá đã lưu. Hãy kết nối mạng để sửa giá.");
       setEditing(null);
       return;
     }
     const parsed = priceSchema.safeParse(raw.replace(/\D/g, ""));
     const item = items.find((candidate) => candidate.id === itemId);
-    if (!parsed.success || !item || !supabase) {
+    if (!parsed.success || !item) {
       setEditing(null);
       return;
     }
     setError("");
-    const { data, error: saveError } = await supabase.rpc(
-      "update_price_with_history",
-      {
-        p_price_id: item.priceId,
-        p_new_amount: parsed.data,
-        p_expected_version: item.version,
-        p_reason: "Cập nhật từ ứng dụng",
-      },
-    );
-    if (saveError) {
-      setError(
-        saveError.message.includes("version_conflict")
-          ? "Giá đã được người khác sửa. Hãy tải lại trang."
-          : saveError.message,
-      );
+    let updated;
+    try {
+      updated = await updatePrice({ priceId: item.priceId, amount: parsed.data, expectedVersion: item.version, reason: "Cập nhật từ ứng dụng" }, navigator.onLine);
+    } catch (writeError) {
+      setError(priceWriteErrorMessage(writeError));
       setEditing(null);
       return;
     }
-    const updated = data as unknown as {
-      amount: number | string;
-      version: number;
-    };
-    const { data: historyRows } = await supabase
-      .from("price_history")
-      .select("id")
-      .eq("price_id", item.priceId)
-      .order("changed_at", { ascending: false })
-      .limit(1);
-    const historyId = historyRows?.[0]?.id as number | undefined;
-    setItems((current) =>
-      current.map((row) =>
-        row.id === itemId
-          ? { ...row, price: Number(updated.amount), version: updated.version }
-          : row,
-      ),
-    );
-    setInvoice((current) => current.map((line) =>
-      line.item.priceId === item.priceId
-        ? { ...line, item: { ...line.item, price: Number(updated.amount), version: updated.version }, unitPrice: Number(updated.amount), total: line.packageCount * Number(updated.amount) }
-        : line,
-    ));
-    if (historyId)
-      setHistory((current) => [
-        ...current,
-        {
-          itemId,
-          historyId,
-          oldAmount: item.price,
-          expectedVersion: updated.version,
-        },
-      ]);
+    setItems((current) => current.map((row) => row.id === itemId
+      ? { ...row, price: updated.amount, version: updated.version }
+      : row));
+    setInvoice((current) => current.map((line) => line.item.priceId === item.priceId
+      ? { ...line, item: { ...line.item, price: updated.amount, version: updated.version }, unitPrice: updated.amount, total: line.packageCount * updated.amount }
+      : line));
+    setHistory((current) => [...current, {
+      itemId,
+      historyId: updated.historyId,
+      oldAmount: item.price,
+      expectedVersion: updated.version,
+    }]);
     setEditing(null);
   }
 
@@ -711,29 +622,23 @@ export function PriceApp() {
       return;
     }
     const last = history.at(-1);
-    if (!last || !supabase) return;
-    const { data, error: undoError } = await supabase.rpc("undo_price_change", {
-      p_history_id: last.historyId,
-      p_expected_version: last.expectedVersion,
-    });
-    if (undoError) {
-      setError(undoError.message);
+    if (!last) return;
+    let updated;
+    try {
+      updated = await undoPrice({ historyId: last.historyId, expectedVersion: last.expectedVersion }, navigator.onLine);
+    } catch (writeError) {
+      setError(priceWriteErrorMessage(writeError));
       return;
     }
-    const updated = data as unknown as {
-      amount: number | string;
-      version: number;
-    };
-    setItems((current) =>
-      current.map((row) =>
-        row.id === last.itemId
-          ? { ...row, price: Number(updated.amount), version: updated.version }
-          : row,
-      ),
-    );
+    setItems((current) => current.map((row) => row.id === last.itemId
+      ? { ...row, price: updated.amount, version: updated.version }
+      : row));
+    const item = items.find((row) => row.id === last.itemId);
+    if (item) setInvoice((current) => current.map((line) => line.item.priceId === item.priceId
+      ? { ...line, item: { ...line.item, price: updated.amount, version: updated.version }, unitPrice: updated.amount, total: line.packageCount * updated.amount }
+      : line));
     setHistory((current) => current.slice(0, -1));
   }
-
   return (
     <div className="min-h-screen">
       <header className="pos-header">
