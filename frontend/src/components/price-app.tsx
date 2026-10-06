@@ -23,6 +23,8 @@ import { formatVnd, priceSchema } from "@/features/pricing/validation";
 import { selectBestPrice } from "@/features/pricing/select-price";
 import { matchesCatalogQuery } from "@/features/search/parser";
 import { createClient } from "@/lib/supabase/client";
+import { fetchCatalog } from "@/lib/api/catalog";
+import { fetchSourceSignedUrl } from "@/lib/api/source-files";
 
 type Item = {
   id: number;
@@ -70,32 +72,6 @@ type CatalogEntry = {
   displayName: string;
   sourcePages: number[];
   sourceFiles: string[];
-};
-type PriceRow = {
-  id: number;
-  amount: number | string;
-  version: number;
-  price_type: string;
-  minimum_quantity: number | string;
-  active: boolean;
-  price_lists: { suppliers: { name: string } | null } | null;
-};
-type PackageRow = {
-  id: number;
-  name: string;
-  quantity: number | string;
-  base_unit: string;
-  note: string | null;
-  prices: PriceRow[];
-};
-type VariantRow = {
-  id: number;
-  display_name: string;
-  raw_specification: string | null;
-  verification_status: Item["status"];
-  products: { id: number; name: string; categories: { id: number; name: string } | null } | null;
-  packaging_options: PackageRow[];
-  variant_sources: { source_pages: { page_number: number | null; storage_path:string } | null }[];
 };
 type UndoEntry = {
   itemId: number;
@@ -222,89 +198,28 @@ export function PriceApp() {
         setLoading(false);
         return;
       }
-      const { data, error: loadError } = await supabase
-        .from("product_variants")
-        .select(
-          `
-        id, display_name, raw_specification, verification_status,
-        products!inner(id, name, categories!inner(id, name)),
-        variant_sources(source_pages(page_number, storage_path)),
-        packaging_options(id, name, quantity, base_unit, note,
-          prices(id, amount, version, price_type, minimum_quantity, active, price_lists(suppliers(name)))
-        )
-      `,
-        )
-        .eq("active", true)
-        .neq("verification_status", "sample")
-        .limit(1000);
-      if (loadError) {
-        setError(`Không tải được bảng giá: ${loadError.message}`);
+      let response;
+      try { response = await fetchCatalog(); }
+      catch {
+        setError("Không tải được bảng giá.");
         setLoading(false);
         return;
       }
-      const rows = (data ?? []) as unknown as VariantRow[];
-      const entries = rows.map((variant) => ({
-        categoryId: variant.products?.categories?.id ?? 0,
-        productId: variant.products?.id ?? 0,
-        variantId: variant.id,
-        name: variant.products?.name ?? variant.display_name,
-        category: variant.products?.categories?.name ?? "Chưa phân nhóm",
-        spec: variant.raw_specification ?? variant.display_name,
-        displayName: variant.display_name,
-        sourcePages: variant.variant_sources
-          .map((source) => source.source_pages?.page_number)
-          .filter((page): page is number => page !== null && page !== undefined),
-        sourceFiles: variant.variant_sources
-          .map((source) => source.source_pages?.storage_path)
-          .filter((path): path is string => Boolean(path)),
-      }));
-      const loaded = rows.flatMap((variant) =>
-        variant.packaging_options.flatMap((pack) =>
-          pack.prices.filter((price) => price.active).map((price) => ({
-            id: price.id,
-            priceId: price.id,
-            categoryId: variant.products?.categories?.id ?? 0,
-            productId: variant.products?.id ?? 0,
-            variantId: variant.id,
-            packagingId: pack.id,
-            name: variant.products?.name ?? variant.display_name,
-            category: variant.products?.categories?.name ?? "Chưa phân nhóm",
-            variantDisplayName: variant.display_name,
-            spec: `${variant.raw_specification ?? variant.display_name} • ${pack.name}`,
-            variantSpec: variant.raw_specification ?? variant.display_name,
-            packageName: pack.name,
-            packageQuantity: Number(pack.quantity),
-            packageNote: pack.note ?? "",
-            priceType: price.price_type,
-            minimumQuantity: Number(price.minimum_quantity),
-            price: Number(price.amount),
-            unit: pack.base_unit,
-            supplier:
-              price.price_lists?.suppliers?.name ?? "Chưa rõ nhà cung cấp",
-            sourcePages: variant.variant_sources
-              .map((source) => source.source_pages?.page_number)
-              .filter((page): page is number => page !== null && page !== undefined),
-            sourceFiles: variant.variant_sources
-              .map((source) => source.source_pages?.storage_path)
-              .filter((path): path is string => Boolean(path)),
-            status: variant.verification_status,
-            version: price.version,
-          })),
-        ),
-      );
+      const entries = response.entries;
+      const loaded = response.prices;
       setItems(loaded);
       setCatalogEntries(entries);
       const requestedVariant = Number(new URLSearchParams(window.location.search).get("variantId"));
-      const matchedVariant = rows.find((row) => row.id === requestedVariant);
+      const matchedVariant = entries.find((entry) => entry.variantId === requestedVariant);
       if (matchedVariant) {
         setSelected({
-          name: matchedVariant.products?.name ?? matchedVariant.display_name,
-          spec: matchedVariant.raw_specification ?? matchedVariant.display_name,
+          name: matchedVariant.name,
+          spec: matchedVariant.spec,
         });
       }
       await cacheSnapshot("catalog", loaded);
       await cacheSnapshot("catalog-entries", entries);
-      setSynced(new Date().toISOString());
+      setSynced(response.syncedAt);
       setLoading(false);
     }
     load();
@@ -562,26 +477,18 @@ export function PriceApp() {
     } catch {
       // Fall through to the private Storage bucket.
     }
-    if (!supabase) {
+    let signedUrl: string;
+    try {
+      ({ signedUrl } = await fetchSourceSignedUrl(storagePath));
+    } catch {
       imageWindow?.close();
       setOpeningSource(null);
-      setSourceImageError(`Không tìm thấy ảnh cục bộ ${fileName ?? objectPath}.`);
+      setSourceImageError("Không tạo được liên kết ảnh. Kiểm tra file đã được upload.");
       return;
     }
-    const { data, error: signedUrlError } = await supabase.storage
-      .from("source-pages")
-      .createSignedUrl(objectPath, 300);
     setOpeningSource(null);
-    if (signedUrlError || !data?.signedUrl) {
-      imageWindow?.close();
-      setSourceImageError(
-        signedUrlError?.message ??
-          "Không tạo được liên kết ảnh. Kiểm tra file đã được upload.",
-      );
-      return;
-    }
-    if (imageWindow) imageWindow.location.href = data.signedUrl;
-    else window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    if (imageWindow) imageWindow.location.href = signedUrl;
+    else window.open(signedUrl, "_blank", "noopener,noreferrer");
   }
 
   function openCatalogEditor(priceItem?: Item) {

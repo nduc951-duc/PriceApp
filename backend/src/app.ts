@@ -9,6 +9,8 @@ import type { SupabaseFactory } from "./repositories/supabase-client.js";
 import { registerHealthRoutes } from "./routes/health.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerRagRoutes } from "./routes/v1/rag.routes.js";
+import { registerCatalogRoutes } from "./routes/v1/catalog.routes.js";
+import { registerSourceFilesRoutes } from "./routes/v1/source-files.routes.js";
 
 export function buildApp(options: { env: AppEnv; supabaseFactory: SupabaseFactory; logStream?: Writable }): FastifyInstance {
   const app = Fastify({ logger: { level: "info", stream: options.logStream, serializers: { req: req => ({ id: req.id }), res: res => ({ statusCode: res.statusCode }) } }, logController: new LogController({ disableRequestLogging: true }) });
@@ -35,5 +37,7 @@ export function buildApp(options: { env: AppEnv; supabaseFactory: SupabaseFactor
   registerHealthRoutes(app);
   registerAuthRoutes(app);
   registerRagRoutes(app);
+  registerCatalogRoutes(app);
+  registerSourceFilesRoutes(app);
   return app;
 }
