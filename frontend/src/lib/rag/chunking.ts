@@ -1,5 +1,5 @@
 export type TextChunk = { index: number; content: string; start: number; end: number };
-export const CHUNKER_VERSION = "lines-1100-overlap160-v1";
+export const CHUNKER_VERSION = "lines-1100-overlap160-v2";
 
 const DEFAULT_CHUNK_CHARS = 1_100;
 const DEFAULT_OVERLAP_CHARS = 160;
@@ -24,53 +24,59 @@ export function chunkText(
   const normalized = normalizeChunkSource(input);
   if (!normalized) return [];
 
-  const units = normalized.split(/\n+/).flatMap((line) => {
-    const trimmed = line.trim();
-    if (!trimmed) return [];
-    if (trimmed.length <= chunkChars) return [trimmed];
-    return trimmed.match(/[^.!?;]+[.!?;]?\s*/g)?.map((part) => part.trim()).filter(Boolean)
-      ?? [trimmed];
-  });
+  const units: Array<{ start: number; end: number }> = [];
+  const addUnit = (start: number, end: number) => {
+    const raw = normalized.slice(start, end);
+    const content = raw.trim();
+    if (!content) return;
+    const offset = start + raw.length - raw.trimStart().length;
+    units.push({ start: offset, end: offset + content.length });
+  };
+  for (const line of normalized.matchAll(/[^\n]+/g)) {
+    if (line[0].length <= chunkChars) {
+      addUnit(line.index, line.index + line[0].length);
+      continue;
+    }
+    for (const sentence of line[0].matchAll(/[^.!?;]+[.!?;]?\s*|[.!?;]+\s*/g)) {
+      addUnit(line.index + sentence.index, line.index + sentence.index + sentence[0].length);
+    }
+  }
 
   const chunks: TextChunk[] = [];
-  let current = "";
-  let cursor = 0;
-  let start = 0;
+  let currentStart: number | null = null;
+  let currentEnd = 0;
+  const emit = (start: number, end: number) => {
+    const raw = normalized.slice(start, end);
+    const content = raw.trim();
+    if (!content) return null;
+    const offset = start + raw.length - raw.trimStart().length;
+    const chunk = { index: chunks.length, content, start: offset, end: offset + content.length };
+    chunks.push(chunk);
+    return chunk;
+  };
   const push = () => {
-    const content = current.trim();
-    if (!content) return;
-    const actualStart = normalized.indexOf(content, start);
-    const offset = actualStart >= 0 ? actualStart : start;
-    chunks.push({ index: chunks.length, content, start: offset, end: offset + content.length });
-    cursor = offset + content.length;
-    const overlapStart = Math.max(offset, cursor - overlapChars);
-    current = normalized.slice(overlapStart, cursor).trim();
-    start = overlapStart;
+    if (currentStart === null) return;
+    const chunk = emit(currentStart, currentEnd);
+    if (!chunk) { currentStart = null; return; }
+    const overlapStart = Math.max(chunk.start, chunk.end - overlapChars);
+    const overlap = normalized.slice(overlapStart, chunk.end);
+    currentStart = overlap.trim() ? overlapStart + overlap.length - overlap.trimStart().length : null;
+    currentEnd = chunk.end;
   };
 
   for (const unit of units) {
-    if (unit.length > chunkChars) {
-      if (current.trim()) push();
-      const unitStart = normalized.indexOf(unit, cursor);
-      for (let offset = 0; offset < unit.length; offset += chunkChars - overlapChars) {
-        const rawPiece = unit.slice(offset, offset + chunkChars);
-        const piece = rawPiece.trim();
-        const pieceStart = unitStart + offset + (rawPiece.length - rawPiece.trimStart().length);
-        if (piece) chunks.push({ index: chunks.length, content: piece, start: pieceStart, end: pieceStart + piece.length });
+    if (unit.end - unit.start > chunkChars) {
+      push();
+      for (let start = unit.start; start < unit.end; start += chunkChars - overlapChars) {
+        emit(start, Math.min(start + chunkChars, unit.end));
       }
-      current = "";
+      currentStart = null;
       continue;
     }
-    const candidate = current ? `${current}\n${unit}` : unit;
-    if (candidate.length > chunkChars && current.trim()) push();
-    current = current ? `${current}\n${unit}` : unit;
-    if (current.length > chunkChars) current = unit;
+    if (currentStart !== null && unit.end - currentStart > chunkChars) push();
+    if (currentStart === null || unit.end - currentStart > chunkChars) currentStart = unit.start;
+    currentEnd = unit.end;
   }
-  if (current.trim()) {
-    const content = current.trim();
-    const actualStart = normalized.indexOf(content, start);
-    const offset = actualStart >= 0 ? actualStart : start;
-    chunks.push({ index: chunks.length, content, start: offset, end: offset + content.length });
-  }
+  push();
   return chunks;
 }

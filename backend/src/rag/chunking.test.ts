@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chunkText } from "./chunking.js";
+import { chunkText, normalizeChunkSource } from "./chunking.js";
 
 describe("chunkText", () => {
   it("returns nothing for blank input and preserves Vietnamese text", () => {
@@ -28,4 +28,18 @@ describe("chunkText", () => {
     }
     expect(chunkText(input, 200, 20).length).toBeGreaterThan(1);
   });
+});
+
+it("uses source positions for repeated long sentences and hard-split lines", () => {
+  const repeated = `${"vật tư ".repeat(40)}quy cách.`;
+  const input = `  ${repeated}   ${repeated}   ${repeated}\r\n${"d".repeat(1500)}\r\n${"d".repeat(1500)}`;
+  const source = normalizeChunkSource(input);
+  const chunks = chunkText(input, 500, 70);
+  expect(chunks.length).toBeGreaterThan(5);
+  for (const chunk of chunks) {
+    expect(chunk.start).toBeGreaterThanOrEqual(0);
+    expect(chunk.content.length).toBeLessThanOrEqual(500);
+    expect(source.slice(chunk.start, chunk.end)).toBe(chunk.content);
+  }
+  expect(chunks.some(chunk => chunk.start > source.lastIndexOf("\n"))).toBe(true);
 });

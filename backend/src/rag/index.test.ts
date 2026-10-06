@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 const mocks = vi.hoisted(() => ({ embed: vi.fn(), fingerprint: vi.fn() }));
 vi.mock("./provider.js", () => ({
@@ -65,6 +66,7 @@ function harness(text: string) {
 
 describe("staged index", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     mocks.fingerprint.mockResolvedValue("ollama:bge-m3:sha256:1024");
     mocks.embed.mockResolvedValue([Array(1024).fill(0.1)]);
   });
@@ -96,5 +98,18 @@ describe("staged index", () => {
     const resumed = await indexRag(client);
     expect(resumed).toMatchObject({ status: "completed", checkpoint: first.chunks, runId: first.runId });
     expect(state.getActive()).toBe(first.runId);
+  });
+
+  it("rebuilds vectors persisted under the previous chunker fingerprint", async () => {
+    const state = harness("Vật tư A 8 ly");
+    client = state.client as unknown as SupabaseClient;
+    await indexRag(client);
+    const oldFingerprint = createHash("sha256").update(`${state.rows[0]!.content_hash}:lines-1100-overlap160-v1:ollama:bge-m3:sha256:1024`).digest("hex");
+    state.rows[0]!.embedding_fingerprint = oldFingerprint;
+    const result = await indexRag(client);
+    expect(result).toMatchObject({ indexed: 1, reused: 0, status: "completed" });
+    expect(mocks.embed).toHaveBeenCalledTimes(2);
+    expect(state.rows[1]!.embedding_fingerprint).not.toBe(oldFingerprint);
+    expect(state.getActive()).toBe(result.runId);
   });
 });

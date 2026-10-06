@@ -39,7 +39,7 @@ describe("migrated source review and cleanup", () => {
     };
     const from = vi.fn((table: string) => ({ select: () => chain(table === "rag_chunks" ? [{ chunk_key: "old" }] : []) }));
     const rpc = vi.fn(async (name: string) => ({ data: name === "rag_start_index_run"
-      ? { id: 4, corpus_hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", fingerprint: "lines-1100-overlap160-v1:ollama:bge-m3:digest:1024", checkpoint: 0, total_chunks: 0, changed: 0, reused: 0 }
+      ? { id: 4, corpus_hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", fingerprint: "lines-1100-overlap160-v2:ollama:bge-m3:digest:1024", checkpoint: 0, total_chunks: 0, changed: 0, reused: 0 }
       : { id: 4, changed: 0, reused: 0, removed: 1 }, error: null }));
     const body = await indexRag({ from, rpc } as unknown as SupabaseClient);
     expect(body).toMatchObject({ status: "completed", indexed: 0, removed: 1, chunks: 0 });

@@ -46,6 +46,24 @@ describe("owner chunk preview", () => {
     } finally { await app.close(); }
   });
 
+  it("preserves spaces between sentences in a long single-line preview", async () => {
+    const { app, writes } = fixture();
+    const first = `${"a".repeat(399)}.`;
+    const second = `${"b".repeat(399)}.`;
+    const third = `${"c".repeat(399)}.`;
+    const source = `${first} ${second} ${third}`;
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/v1/admin/rag/preview", headers: { authorization: authorization() }, payload: { extractedText: source } });
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.source).toBe(source);
+      expect(body.chunks).toHaveLength(2);
+      expect(body.chunks[0]).toEqual({ index: 0, content: `${first} ${second}`, start: 0, end: 801 });
+      for (const chunk of body.chunks) expect(source.slice(chunk.start, chunk.end)).toBe(chunk.content);
+      expect(writes).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+
   it.each([{}, { extractedText: 42 }, { extractedText: "a".repeat(100_001) }])("rejects invalid preview input", async payload => {
     const { app, writes } = fixture();
     try {

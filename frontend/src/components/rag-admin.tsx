@@ -4,9 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { Activity, ArrowLeft, BookOpenCheck, LoaderCircle, Save, Sparkles } from "lucide-react";
 import { requestApi, ApiRequestError } from "@/lib/api/client";
+import { isRagHealthDiagnostics, type RagHealthDiagnostics } from "@/lib/api/rag-health";
 
 type Page = { sourcePageId: number; pageNumber: number | null; title: string; extractedText: string; reviewStatus: "draft" | "approved" | "rejected"; revision: number };
-type Health = { ok: boolean; provider: string; database: { ok: boolean; detail: string }; embedding: { ok: boolean; detail: string; model?: string; dimensions?: number; fingerprint?: string }; chat: { ok: boolean; detail: string; model?: string } };
 type IndexProgress = { runId: number; status: "running" | "failed" | "completed"; checkpoint: number; chunks: number; indexed: number; reused: number; removed: number; embeddingModel: string; contentHash: string };
 type PreviewChunk = { index: number; content: string; start: number; end: number };
 function errorMessage(cause: unknown, fallback: string) {
@@ -23,7 +23,7 @@ export function RagAdmin() {
   const [notice, setNotice] = useState("");
   const [indexed, setIndexed] = useState<number | null>(null);
   const [indexProgress, setIndexProgress] = useState<IndexProgress | null>(null);
-  const [health, setHealth] = useState<Health | null>(null);
+  const [health, setHealth] = useState<RagHealthDiagnostics | null>(null);
   const selected = pages.find((page) => page.sourcePageId === selectedId) ?? null;
   const approvedCount = useMemo(() => pages.filter((page) => page.reviewStatus === "approved").length, [pages]);
   const [preview, setPreview] = useState<{ text: string; chunks: PreviewChunk[] }>({ text: "", chunks: [] });
@@ -97,8 +97,10 @@ export function RagAdmin() {
   async function checkHealth() {
     setBusy(true); setError(""); setHealth(null);
     try {
-      const body = await requestApi<Health>("/api/v1/admin/rag/health", {}, { acceptedStatuses: [503] });
-      if (!body?.database || !body.embedding || !body.chat) throw new Error("Invalid health response");
+      const body = await requestApi<RagHealthDiagnostics>("/api/v1/admin/rag/health", {}, {
+        acceptedStatuses: [503], validateAcceptedResponse: isRagHealthDiagnostics,
+      });
+      if (!isRagHealthDiagnostics(body)) throw new ApiRequestError(502, "INVALID_API_RESPONSE");
       setHealth(body);
     } catch (cause) { setError(errorMessage(cause, "Không kiểm tra được RAG. Hãy thử lại sau.")); }
     finally { setBusy(false); }
