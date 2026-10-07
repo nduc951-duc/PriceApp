@@ -92,6 +92,10 @@ export function generateContractFiles(): { openapi: string; types: string } {
   return { openapi: `${JSON.stringify(document, null, 2)}\n`, types: buildTypes(document) };
 }
 
+export function normalizeLineEndings(content: string): string {
+  return content.replace(/\r\n/g, "\n");
+}
+
 async function main(): Promise<void> {
   const generated = generateContractFiles();
   const check = process.argv.includes("--check");
@@ -99,7 +103,7 @@ async function main(): Promise<void> {
     const [currentOpenapi, currentTypes] = await Promise.all([
       readFile(openapiPath, "utf8").catch(() => ""), readFile(typesPath, "utf8").catch(() => ""),
     ]);
-    if (currentOpenapi !== generated.openapi || currentTypes !== generated.types) {
+    if (normalizeLineEndings(currentOpenapi) !== generated.openapi || normalizeLineEndings(currentTypes) !== generated.types) {
       throw new Error("Generated API contract is stale. Run npm run openapi:generate.");
     }
     return;
