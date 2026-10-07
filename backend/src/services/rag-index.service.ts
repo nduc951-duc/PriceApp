@@ -5,7 +5,7 @@ import { ragPagesRepository } from "../repositories/rag-pages.repository.js";
 import { ragCatalogRepository } from "../repositories/rag-catalog.repository.js";
 import { createHash } from "node:crypto";
 import { CHUNKER_VERSION, chunkText } from "../rag/chunking.js";
-import { EMBEDDING_DIMENSIONS, embedTexts, embeddingModel, embeddingFingerprint } from "../rag/provider.js";
+import { EMBEDDING_DIMENSIONS, embedTexts, embeddingModel, embeddingFingerprint, RagProviderUnavailableError } from "../rag/provider.js";
 
 
 type PageText = { source_page_id: number; title: string; extracted_text: string; revision: number; source_pages: { page_number: number | null; verification_status: string } | null };
@@ -24,7 +24,6 @@ async function retry<T>(operation: () => Promise<T>): Promise<T> {
   }
   throw last;
 }
-
 export async function latestRagIndex(client: SupabaseClient) {
   const { data, error } = await ragChunksRepository(client).latestRun();
   if (error) throw new Error("RAG repository unavailable");
@@ -142,7 +141,7 @@ export async function indexRag(client: SupabaseClient) {
     return summary;
   } catch (error) {
     if (error instanceof ApiError) throw error;
+    if (error instanceof RagProviderUnavailableError) throw new ApiError(503, "RAG_UNAVAILABLE", "Dịch vụ RAG tạm thời chưa sẵn sàng.");
     throw new ApiError(500, "INTERNAL_ERROR", "Lập chỉ mục thất bại. Kiểm tra cấu hình và thử tiếp sau khi xử lý lỗi.");
   }
 }
-

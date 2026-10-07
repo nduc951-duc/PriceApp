@@ -24,6 +24,26 @@ function model(env: string) {
 async function readError(response: Response) {
   return `AI provider trả lỗi HTTP ${response.status}`;
 }
+export class RagProviderUnavailableError extends Error {
+  constructor() {
+    super("RAG provider unavailable");
+    this.name = "RagProviderUnavailableError";
+  }
+}
+async function providerFetch(input: string, init: Parameters<typeof fetch>[1]): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(input, init);
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    if (error instanceof TypeError || name === "AbortError" || name === "TimeoutError") {
+      throw new RagProviderUnavailableError();
+    }
+    throw error;
+  }
+  if (response.status === 429 || response.status >= 500) throw new RagProviderUnavailableError();
+  return response;
+}
 function validateVectors(value: unknown, expected: number): number[][] {
   if (!Array.isArray(value) || value.length !== expected) throw new Error("Embedding provider trả về sai số vector.");
   return value.map((entry) => {
@@ -39,7 +59,7 @@ export function providerName() { return provider(); }
 export async function embeddingFingerprint() {
   let artifact = process.env.RAG_EMBEDDING_ARTIFACT?.trim();
   if (provider() === "ollama") {
-    const response = await fetch(`${ollamaRoot()}/api/tags`, { signal: AbortSignal.timeout(10_000) });
+    const response = await providerFetch(`${ollamaRoot()}/api/tags`, { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) throw new Error("Không đọc được thông tin model Ollama.");
     const body = await response.json() as { models?: Array<{ name: string; digest: string }> };
     artifact = body.models?.find((item) => item.name === embeddingModel() || item.name === `${embeddingModel()}:latest`)?.digest;
@@ -63,7 +83,7 @@ export function normalizeIndexedEmbeddings(data: OpenAIEmbeddingResponse["data"]
 export async function embedTexts(input: string[]): Promise<number[][]> {
   if (!input.length) return [];
   if (provider() === "ollama") {
-    const response = await fetch(`${ollamaRoot()}/api/embed`, {
+    const response = await providerFetch(`${ollamaRoot()}/api/embed`, {
       method: "POST", headers: headers(), body: JSON.stringify({ model: embeddingModel(), input }),
       signal: AbortSignal.timeout(60_000),
     });
@@ -71,7 +91,7 @@ export async function embedTexts(input: string[]): Promise<number[][]> {
     const body = await response.json() as OllamaEmbeddingResponse;
     return validateVectors(body.embeddings, input.length);
   }
-  const response = await fetch(`${baseUrl()}/embeddings`, {
+  const response = await providerFetch(`${baseUrl()}/embeddings`, {
     method: "POST", headers: headers(),
     body: JSON.stringify({ model: embeddingModel(), input, dimensions: EMBEDDING_DIMENSIONS }),
     signal: AbortSignal.timeout(60_000),
@@ -90,7 +110,7 @@ export async function generateGroundedAnswer(input: {
     id: index + 1, page: item.page, content: item.content, current_prices_from_sql: item.prices ?? [],
   }));
   const endpoint = provider() === "ollama" ? `${ollamaRoot()}/v1/chat/completions` : `${baseUrl()}/chat/completions`;
-  const response = await fetch(endpoint, {
+  const response = await providerFetch(endpoint, {
     method: "POST", headers: headers(),
     body: JSON.stringify({
       model: selectedChatModel, temperature: 0.1,

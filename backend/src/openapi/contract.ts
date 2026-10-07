@@ -27,14 +27,34 @@ const catalogUpdateResponse = z.object({
 });
 const signedUrlResponse = z.object({ signedUrl: z.url(), expiresIn: z.literal(300) });
 const ragQueryBody = z.strictObject({ question: z.string().trim().min(1).max(1000) });
-const ragQueryResponse = z.object({ answer: text, items: z.array(z.unknown()), sources: z.array(z.unknown()), retrieval: z.object({ vectorChunks: z.number(), lexicalProducts: z.number(), embeddingModel: text }).passthrough() });
-const pagesResponse = z.object({ pages: z.array(z.unknown()) });
+const verificationStatus = z.enum(["verified", "needs_review", "unreadable", "sample"]);
+const ragPrice = z.object({
+  id, amount: z.number(), priceType: z.enum(["retail", "wholesale", "dealer"]), minimumQuantity: z.number(),
+  packagingName: text, packageQuantity: z.number(), unit: text, packageNote: text,
+  priceList: text.nullable(), supplier: text.nullable(), verificationStatus,
+});
+const ragItem = z.object({
+  id, productName: text, category: text, variant: text, verificationStatus,
+  sourcePages: z.array(z.number()), prices: z.array(ragPrice),
+});
+const ragSource = z.object({ pageNumber: z.number(), excerpt: text });
+const ragTrace = z.object({ question: text, chunkIds: z.array(id), variantIds: z.array(id), priceIds: z.array(id), answer: text });
+const ragQueryResponse = z.object({
+  answer: text, items: z.array(ragItem), sources: z.array(ragSource),
+  retrieval: z.object({ vectorChunks: z.number(), lexicalProducts: z.number(), embeddingModel: text, trace: ragTrace.optional() }),
+});
+const ragPage = z.object({ sourcePageId: id, pageNumber: z.number().nullable(), title: text, extractedText: text, reviewStatus: z.enum(["draft", "approved", "rejected"]), revision: z.number().int() });
+const pagesResponse = z.object({ pages: z.array(ragPage) });
 const savePageBody = z.object({ sourcePageId: id, title: text, extractedText: text, reviewStatus: z.enum(["draft", "approved", "rejected"]) });
 const savePageResponse = z.object({ saved: z.literal(true), reviewStatus: z.enum(["draft", "approved", "rejected"]), revision: z.number().int() });
-const indexResponse = z.object({ run: z.unknown().nullable() });
-const indexRunResponse = z.object({ runId: id, status: text, checkpoint: z.number(), indexed: z.number(), reused: z.number(), removed: z.number(), chunks: z.number(), pages: z.number(), variants: z.number(), embeddingModel: text, embeddingDimensions: z.number(), contentHash: text });
-const diagnostic = z.object({ ok: z.boolean(), detail: text, count: z.number().optional(), dimensions: z.number().optional(), model: text.optional(), fingerprint: text.optional() });
-const ragHealthResponse = z.object({ ok: z.boolean(), provider: text, database: diagnostic, embedding: diagnostic, chat: diagnostic });
+const indexRun = z.object({ runId: id, status: z.enum(["running", "failed", "completed"]), checkpoint: z.number(), chunks: z.number(), indexed: z.number(), reused: z.number(), removed: z.number(), embeddingModel: text, contentHash: text });
+const indexResponse = z.object({ run: indexRun.nullable() });
+const indexRunResponse = indexRun.extend({ pages: z.number(), variants: z.number(), embeddingDimensions: z.number() });
+const failedDiagnostic = z.object({ ok: z.literal(false), detail: text });
+const databaseDiagnostic = z.union([failedDiagnostic, z.object({ ok: z.literal(true), detail: text, count: z.number() })]);
+const embeddingDiagnostic = z.union([failedDiagnostic, z.object({ ok: z.literal(true), detail: text, model: text, dimensions: z.number(), fingerprint: text })]);
+const chatDiagnostic = z.union([failedDiagnostic, z.object({ ok: z.literal(true), detail: text, model: text })]);
+const ragHealthResponse = z.object({ ok: z.boolean(), provider: text, database: databaseDiagnostic, embedding: embeddingDiagnostic, chat: chatDiagnostic });
 const previewBody = z.strictObject({ extractedText: z.string().max(100_000) });
 const previewResponse = z.object({ source: text, chunks: z.array(z.object({ index: z.number(), content: text, start: z.number(), end: z.number() })) });
 const priceIdPathParams = z.object({ priceId: z.string().regex(/^[1-9]\d*$/) });
@@ -52,7 +72,7 @@ export const apiContracts = [
   { method: "put", path: "/api/v1/admin/rag/pages", operationId: "saveRagPage", summary: "Lưu trạng thái duyệt trang", auth: true, owner: true, body: savePageBody, response: { 200: savePageResponse } },
   { method: "get", path: "/api/v1/admin/rag/index", operationId: "getRagIndex", summary: "Lấy tiến độ lập chỉ mục", auth: true, owner: true, response: { 200: indexResponse } },
   { method: "post", path: "/api/v1/admin/rag/index", operationId: "buildRagIndex", summary: "Lập chỉ mục tài liệu", auth: true, owner: true, response: { 200: indexRunResponse } },
-  { method: "get", path: "/api/v1/admin/rag/health", operationId: "getRagHealth", summary: "Kiểm tra dịch vụ RAG", auth: true, owner: true, response: { 200: ragHealthResponse, 503: ragHealthResponse } },
+  { method: "get", path: "/api/v1/admin/rag/health", operationId: "getRagHealth", summary: "Kiểm tra dịch vụ RAG", auth: true, owner: true, response: { 200: ragHealthResponse, 503: z.union([ragHealthResponse, errorResponse]) } },
   { method: "post", path: "/api/v1/admin/rag/preview", operationId: "previewRagPage", summary: "Xem trước phân đoạn văn bản", auth: true, owner: true, body: previewBody, response: { 200: previewResponse } },
 ] as const;
 

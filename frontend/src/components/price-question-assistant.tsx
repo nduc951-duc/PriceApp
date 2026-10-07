@@ -4,10 +4,9 @@ import Link from "next/link";
 import { ArrowLeft, LoaderCircle, MessageCircle, Search, Sparkles } from "lucide-react";
 import { formatVnd } from "@/features/pricing/validation";
 import { requestApi, ApiRequestError } from "@/lib/api/client";
+import type { ApiResponse } from "@/lib/api/generated/api-types";
 
-type Price = { id: number; amount: number; priceType: string; minimumQuantity: number; packagingName: string; packageQuantity: number; packageNote: string; unit: string; priceList: string | null; supplier: string | null; verificationStatus: string };
-type Item = { id: number; productName: string; category: string; variant: string; verificationStatus: string; sourcePages: number[]; prices: Price[] };
-type Answer = { answer: string; items: Item[]; sources: { pageNumber: number; excerpt: string }[]; retrieval: { vectorChunks: number; lexicalProducts: number; embeddingModel: string } };
+type Answer = ApiResponse<"/api/v1/rag/query", "post">;
 const examples = ["Giá sỉ tắc kê sắt 8 ly là bao nhiêu?", "Bulong 8 ly x 3F có những mức giá nào?", "Trang nào có thông tin về vít tole?"];
 const priceTypeLabel = (value: string) => value === "wholesale" ? "Giá sỉ" : value === "dealer" ? "Giá đại lý" : "Giá lẻ";
 

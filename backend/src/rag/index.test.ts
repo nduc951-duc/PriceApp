@@ -4,8 +4,10 @@ import { createHash } from "node:crypto";
 const mocks = vi.hoisted(() => ({ embed: vi.fn(), fingerprint: vi.fn() }));
 vi.mock("./provider.js", () => ({
   EMBEDDING_DIMENSIONS: 1024, embeddingModel: () => "bge-m3", embeddingFingerprint: mocks.fingerprint, embedTexts: mocks.embed,
+  RagProviderUnavailableError: class RagProviderUnavailableError extends Error {},
 }));
 import { indexRag } from "../services/rag-index.service.js";
+import { RagProviderUnavailableError } from "./provider.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 let client: SupabaseClient;
 
@@ -98,6 +100,15 @@ describe("staged index", () => {
     const resumed = await indexRag(client);
     expect(resumed).toMatchObject({ status: "completed", checkpoint: first.chunks, runId: first.runId });
     expect(state.getActive()).toBe(first.runId);
+  });
+
+  it("returns safe unavailability and never publishes after a provider outage", async () => {
+    const state = harness("A 8 ly");
+    client = state.client as unknown as SupabaseClient;
+    mocks.embed.mockRejectedValue(new RagProviderUnavailableError("provider timeout private-token"));
+    await expect(indexRag(client)).rejects.toMatchObject({ statusCode: 503, code: "RAG_UNAVAILABLE", message: expect.not.stringContaining("private-token") });
+    expect(state.getActive()).toBe(0);
+    expect([...state.runs.values()].every((run) => run.status !== "completed")).toBe(true);
   });
 
   it("rebuilds vectors persisted under the previous chunker fingerprint", async () => {

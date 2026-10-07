@@ -5,10 +5,13 @@ import Image from "next/image";
 import { Activity, ArrowLeft, BookOpenCheck, LoaderCircle, Save, Sparkles } from "lucide-react";
 import { requestApi, ApiRequestError } from "@/lib/api/client";
 import { isRagHealthDiagnostics, type RagHealthDiagnostics } from "@/lib/api/rag-health";
+import type { ApiRequestBody, ApiResponse } from "@/lib/api/generated/api-types";
 
-type Page = { sourcePageId: number; pageNumber: number | null; title: string; extractedText: string; reviewStatus: "draft" | "approved" | "rejected"; revision: number };
-type IndexProgress = { runId: number; status: "running" | "failed" | "completed"; checkpoint: number; chunks: number; indexed: number; reused: number; removed: number; embeddingModel: string; contentHash: string };
-type PreviewChunk = { index: number; content: string; start: number; end: number };
+type Page = ApiResponse<"/api/v1/admin/rag/pages", "get">["pages"][number];
+type IndexProgress = NonNullable<ApiResponse<"/api/v1/admin/rag/index", "get">["run"]>;
+type PreviewChunk = ApiResponse<"/api/v1/admin/rag/preview", "post">["chunks"][number];
+type SavePageInput = ApiRequestBody<"/api/v1/admin/rag/pages", "put">;
+type SavePageResponse = ApiResponse<"/api/v1/admin/rag/pages", "put">;
 function errorMessage(cause: unknown, fallback: string) {
   if (cause instanceof ApiRequestError && cause.status === 401) return "Vui lòng đăng nhập lại.";
   if (cause instanceof ApiRequestError && cause.status === 403) return "Bạn không có quyền quản trị RAG.";
@@ -34,7 +37,7 @@ export function RagAdmin() {
     let active = true;
     const timer = window.setTimeout(() => {
       if (!previewText.trim()) { setPreview({ text: previewText, chunks: [] }); return; }
-      void requestApi<{ source: string; chunks: PreviewChunk[] }>("/api/v1/admin/rag/preview", {
+      void requestApi<ApiResponse<"/api/v1/admin/rag/preview", "post">>("/api/v1/admin/rag/preview", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ extractedText: previewText }), signal: controller.signal,
       }).then(body => { if (active) setPreview({ text: previewText, chunks: body.chunks }); })
@@ -44,10 +47,10 @@ export function RagAdmin() {
   }, [previewText]);
 
   const loadPages = useCallback(async () => {
-    const body = await requestApi<{ pages: Page[] }>("/api/v1/admin/rag/pages");
+    const body = await requestApi<ApiResponse<"/api/v1/admin/rag/pages", "get">>("/api/v1/admin/rag/pages");
     setPages(body.pages);
     setSelectedId((current) => current ?? body.pages?.[0]?.sourcePageId ?? null);
-    const runBody = await requestApi<{ run: IndexProgress | null }>("/api/v1/admin/rag/index");
+    const runBody = await requestApi<ApiResponse<"/api/v1/admin/rag/index", "get">>("/api/v1/admin/rag/index");
     setIndexProgress(runBody.run);
   }, []);
   useEffect(() => { const timer = window.setTimeout(() => { void loadPages().catch((cause) => setError(errorMessage(cause, "Không tải được trang nguồn."))); }, 0); return () => window.clearTimeout(timer); }, [loadPages]);
@@ -74,7 +77,8 @@ export function RagAdmin() {
     if (!selected) return;
     setBusy(true); setError(""); setNotice("");
     try {
-      const body = await requestApi<{ revision: number }>("/api/v1/admin/rag/pages", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...selected, reviewStatus }) });
+      const saveInput: SavePageInput = { sourcePageId: selected.sourcePageId, title: selected.title, extractedText: selected.extractedText, reviewStatus };
+      const body = await requestApi<SavePageResponse>("/api/v1/admin/rag/pages", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(saveInput) });
       updateSelected({ reviewStatus, revision: body.revision }); setDirty(false); setNotice(reviewStatus === "approved" ? "Bản chép đã được duyệt. Hãy tạo lại embedding cho revision mới." : reviewStatus === "rejected" ? "Đã thu hồi cả trang nguồn; mọi chunk gắn trang này không còn được truy xuất." : "Bản nháp đã lưu; chunk OCR cũ không còn được truy xuất.");
     } catch (cause) { setError(errorMessage(cause, "Không lưu được nội dung. Hãy kiểm tra dữ liệu và thử lại.")); }
     finally { setBusy(false); }
@@ -85,7 +89,7 @@ export function RagAdmin() {
     try {
       let progress: IndexProgress;
       do {
-        progress = await requestApi<IndexProgress>("/api/v1/admin/rag/index", { method: "POST" });
+        progress = await requestApi<ApiResponse<"/api/v1/admin/rag/index", "post">>("/api/v1/admin/rag/index", { method: "POST" });
         setIndexProgress(progress);
       } while (progress.status === "running");
       setIndexed(progress.chunks);

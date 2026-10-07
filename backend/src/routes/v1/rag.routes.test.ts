@@ -10,10 +10,10 @@ const adminEndpoints = [
   { method: "GET", url: "/api/v1/admin/rag/health" },
 ] as const;
 
-function fixture(role = "viewer") {
+function fixture(role = "viewer", authResult?: { data: { user: { id: string } | null }; error: { status: number } | null }) {
   const dataAccess = vi.fn(() => { throw new Error("private-token raw-OCR user-id"); });
   const factory = (() => ({
-    auth: { getUser: async () => ({ data: { user: { id: "user-id" } }, error: null }) },
+    auth: { getUser: async () => authResult ?? ({ data: { user: { id: "user-id" } }, error: null }) },
     from: (table: string) => table === "profiles"
       ? { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role }, error: null }) }) }) }
       : dataAccess(),
@@ -90,5 +90,35 @@ describe("versioned RAG route boundaries", () => {
       expect(response.json()).toMatchObject({ error: { code: "RAG_UNAVAILABLE" } });
       expect(response.body).not.toContain("RAG_EMBEDDING_MODEL");
     } finally { await app.close(); vi.unstubAllEnvs(); }
+  });
+
+  it("returns diagnostic 503 health details through the declared response schema", async () => {
+    vi.stubEnv("RAG_EMBEDDING_MODEL", "");
+    vi.stubEnv("RAG_CHAT_MODEL", "");
+    const dataAccess = vi.fn();
+    const factory = (() => ({
+      auth: { getUser: async () => ({ data: { user: { id: "user-id" } }, error: null }) },
+      from: (table: string) => table === "profiles"
+        ? { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: "owner" }, error: null }) }) }) }
+        : table === "rag_page_texts"
+          ? { select: () => ({ eq: async () => ({ count: 0, error: { message: "db unavailable" } }) }) }
+          : { select: async () => ({ count: 0, error: { message: "db unavailable" } }) },
+    })) as SupabaseFactory;
+    const app = buildApp({ env, supabaseFactory: factory });
+    try {
+      const response = await app.inject({ method: "GET", url: "/api/v1/admin/rag/health", headers: { authorization: `Bearer ${token()}` } });
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({ ok: false, database: { ok: false }, embedding: { ok: false }, chat: { ok: false } });
+      expect(response.json()).not.toHaveProperty("requestId");
+    } finally { await app.close(); vi.unstubAllEnvs(); }
+  });
+
+  it("preserves the safe request-id envelope when auth is unavailable before health runs", async () => {
+    const { app } = fixture("viewer", { data: { user: null }, error: { status: 503 } });
+    try {
+      const response = await app.inject({ method: "GET", url: "/api/v1/admin/rag/health", headers: { authorization: `Bearer ${token()}` } });
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({ error: { code: "AUTH_UNAVAILABLE" }, requestId: response.headers["x-request-id"] });
+    } finally { await app.close(); }
   });
 });

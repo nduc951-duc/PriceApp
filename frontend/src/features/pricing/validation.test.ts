@@ -1,6 +1,14 @@
 import { expect, it } from "vitest";
 import { ApiRequestError } from "@/lib/api/client";
-import { priceWriteErrorMessage } from "./validation";
+import { priceSchema, priceWriteErrorMessage } from "./validation";
+
+it.each([-1, Number.NaN, "not-a-price"]) ("rejects invalid price value %s", (value) => {
+  expect(priceSchema.safeParse(value).success).toBe(false);
+});
+
+it("accepts a zero price", () => {
+  expect(priceSchema.safeParse(0)).toMatchObject({ success: true, data: 0 });
+});
 
 it.each([
   [new ApiRequestError(409, "CONFLICT"), "Giá đã được thay đổi hoặc dữ liệu bị trùng. Tải lại bảng giá rồi thử lại."],

@@ -7,9 +7,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./provider.js", () => ({
   embeddingModel: () => "test-1024", embedTexts: mocks.embedTexts,
   generateGroundedAnswer: mocks.generateAnswer,
+  RagProviderUnavailableError: class RagProviderUnavailableError extends Error {},
 }));
 
 import { queryRag } from "../services/rag-query.service.js";
+import { RagProviderUnavailableError } from "./provider.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 let client: SupabaseClient;
 
@@ -78,5 +80,24 @@ describe("RAG query uses current SQL prices", () => {
     expect(body.sources).toEqual([]);
     expect(body.answer).toContain("chưa tìm thấy");
     expect(mocks.generateAnswer).not.toHaveBeenCalled();
+  });
+
+  it("maps a transient embedding-provider failure to safe RAG unavailability", async () => {
+    client = clientWithPrice(() => 10000) as unknown as SupabaseClient;
+    mocks.embedTexts.mockRejectedValueOnce(new RagProviderUnavailableError("provider timed out private-token"));
+    await expect(ask()).rejects.toMatchObject({ statusCode: 503, code: "RAG_UNAVAILABLE", message: expect.not.stringContaining("private-token") });
+  });
+
+  it("maps a transient chat-provider failure to safe RAG unavailability", async () => {
+    client = clientWithPrice(() => 10000) as unknown as SupabaseClient;
+    mocks.generateAnswer.mockRejectedValueOnce(new RagProviderUnavailableError("provider timeout private-token"));
+    await expect(queryRag({ question: "Tắc kê sắt 6x50?" }, client))
+      .rejects.toMatchObject({ statusCode: 503, code: "RAG_UNAVAILABLE", message: expect.not.stringContaining("private-token") });
+  });
+
+  it("leaves unexpected internal errors on the 500 path", async () => {
+    client = clientWithPrice(() => 10000) as unknown as SupabaseClient;
+    mocks.embedTexts.mockRejectedValueOnce(new Error("internal invariant failed"));
+    await expect(ask()).rejects.toThrow("internal invariant failed");
   });
 });

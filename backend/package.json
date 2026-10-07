@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx --env-file=.env.local src/server.ts",
-    "dev:watch": "tsx watch --env-file=.env.local src/server.ts",
-    "start": "node --env-file=.env.local dist/server.js",
+    "dev": "node --env-file-if-exists=.env.local --import tsx src/server.ts",
+    "dev:watch": "node --env-file-if-exists=.env.local --import tsx --watch src/server.ts",
+    "start": "node --env-file-if-exists=.env.local dist/server.js",
     "build": "tsc -p tsconfig.json",
     "openapi:generate": "tsx scripts/generate-contract.ts",
     "api:types": "tsx scripts/generate-contract.ts",
@@ -20,6 +20,7 @@
     "fastify": "^5.6.0",
     "zod": "^4.4.3"
   },
+  "engines": { "node": ">=22.12.0" },
   "devDependencies": {
     "@types/node": "^20",
     "@eslint/js": "^9",

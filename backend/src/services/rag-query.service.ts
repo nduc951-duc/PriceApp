@@ -3,7 +3,7 @@ import { ApiError } from "../middleware/errors.js";
 import { ragChunksRepository } from "../repositories/rag-chunks.repository.js";
 import { ragPagesRepository } from "../repositories/rag-pages.repository.js";
 import { ragCatalogRepository } from "../repositories/rag-catalog.repository.js";
-import { embedTexts, embeddingModel, generateGroundedAnswer } from "../rag/provider.js";
+import { embedTexts, embeddingModel, generateGroundedAnswer, RagProviderUnavailableError } from "../rag/provider.js";
 import { rankVariantIds } from "../rag/rank.js";
 import { priceAnswer } from "../rag/price-answer.js";
 
@@ -26,7 +26,9 @@ export async function queryRag(body: unknown, client: SupabaseClient) {
   if (!question || question.length > 1000) throw new ApiError(400, "INVALID_INPUT", "Nhập câu hỏi từ 1 đến 1.000 ký tự.");
 
   const model = embeddingModel();
-  const [queryVector] = await embedTexts([question]);
+  let queryVector: number[] | undefined;
+  try { [queryVector] = await embedTexts([question]); }
+  catch (error) { if (error instanceof RagProviderUnavailableError) throw new ApiError(503, "RAG_UNAVAILABLE", "Dịch vụ RAG tạm thời chưa sẵn sàng."); throw error; }
   if (!queryVector) throw new Error("Không tạo được embedding cho câu hỏi.");
   const vector = `[${queryVector.join(",")}]`;
   const [{ data: vectorData, error: vectorError }, { data: lexicalData, error: lexicalError }] = await Promise.all([
@@ -92,7 +94,10 @@ export async function queryRag(body: unknown, client: SupabaseClient) {
   const asksForPrice = /giá|bao nhiêu|báo giá|giá sỉ|giá lẻ|đồng|vnđ/i.test(question) && !/trang nào|nguồn nào|trích dẫn/i.test(question);
   const answer = asksForPrice
     ? priceAnswer(items)
-    : await generateGroundedAnswer({ question, evidence: uniqueEvidence });
+    : await generateGroundedAnswer({ question, evidence: uniqueEvidence }).catch((error: unknown) => {
+      if (error instanceof RagProviderUnavailableError) throw new ApiError(503, "RAG_UNAVAILABLE", "Dịch vụ RAG tạm thời chưa sẵn sàng.");
+      throw error;
+    });
   const sources = [...new Map(uniqueEvidence.filter((item) => item.page !== null).map((item) => [item.page!, { pageNumber: item.page!, excerpt: item.content.slice(0, 500) }])).values()];
   const trace = { question, chunkIds: chunks.map((chunk) => chunk.id), variantIds: items.map((item) => item.id), priceIds: items.flatMap((item) => item.prices.map((price) => price.id)), answer };
   return { answer, items, sources, retrieval: { vectorChunks: chunks.length, lexicalProducts: lexicalIds.length, embeddingModel: model, trace } };

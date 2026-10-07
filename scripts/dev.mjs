@@ -8,7 +8,7 @@ const services = [
   {
     name: "api",
     command: node,
-    args: ["--env-file=backend/.env.local", "--import", "tsx", "backend/src/server.ts"],
+    args: ["--env-file-if-exists=backend/.env.local", "--import", "tsx", "backend/src/server.ts"],
   },
   {
     name: "web",

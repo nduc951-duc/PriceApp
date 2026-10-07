@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ApiResponse } from "./generated/api-types";
 
 const failedCheck = z.strictObject({ ok: z.literal(false), detail: z.string().min(1) });
 const databaseCheck = z.union([
@@ -21,7 +22,7 @@ const healthSchema = z.strictObject({
   database: databaseCheck, embedding: embeddingCheck, chat: chatCheck,
 }).refine(health => health.ok === (health.database.ok && health.embedding.ok && health.chat.ok));
 
-export type RagHealthDiagnostics = z.infer<typeof healthSchema>;
+export type RagHealthDiagnostics = ApiResponse<"/api/v1/admin/rag/health", "get">;
 
 export function isRagHealthDiagnostics(value: unknown): value is RagHealthDiagnostics {
   return healthSchema.safeParse(value).success;

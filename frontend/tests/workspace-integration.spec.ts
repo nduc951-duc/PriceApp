@@ -22,7 +22,7 @@ async function loginOwner(page: Page) {
   await page.goto("/");
   await page.locator("#email").fill(ownerEmail);
   await page.locator("#password").fill(ownerPassword);
-  await page.locator('form button[type="submit"]').click();
+  await page.getByRole("button", { name: "ĐĂNG NHẬP" }).click();
   await expect(page.locator("#product-search")).toBeVisible();
 }
 
@@ -75,12 +75,14 @@ test.describe("isolated PriceApp integration", () => {
     }));
     await loginOwner(page);
     await chooseTestBolt(page);
-    const priceButton = page.locator('.pos-price-card button[aria-label^="Sửa giá"]');
+    await page.locator(".pos-spec-banner button").click();
+    const dialog = page.getByRole("dialog", { name: "Test Bolt" });
+    const priceButton = dialog.getByRole("button", { name: "Sửa giá Test Bolt" });
     await priceButton.click();
-    const input = page.locator(".pos-price-card input");
+    const input = dialog.locator("input.mt-3");
     await input.fill("9999");
     await input.press("Enter");
-    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.locator(".pos-main > p[role=alert]")).toBeVisible();
     await expect(page.locator(".pos-price-amount")).toContainText("2.500");
   });
 
@@ -97,12 +99,14 @@ test.describe("isolated PriceApp integration", () => {
       Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
       window.dispatchEvent(new Event("offline"));
     });
-    const priceButton = page.locator('.pos-price-card button[aria-label^="Sửa giá"]');
+    await page.locator(".pos-spec-banner button").click();
+    const dialog = page.getByRole("dialog", { name: "Test Bolt" });
+    const priceButton = dialog.getByRole("button", { name: "Sửa giá Test Bolt" });
     await priceButton.click();
-    const input = page.locator(".pos-price-card input");
+    const input = dialog.locator("input.mt-3");
     await input.fill("9999");
     await input.press("Enter");
-    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.locator(".pos-main > p[role=alert]")).toBeVisible();
     expect(writeRequests).toBe(0);
   });
 
@@ -118,7 +122,7 @@ test.describe("isolated PriceApp integration", () => {
     await loginOwner(page);
     await page.goto("/questions");
     await page.locator("#price-question").fill("Test question");
-    await page.locator("form button[type=submit]").click();
+    await page.getByRole("button", { name: "Hỏi giá" }).click();
     await expect(page.getByText("Câu trả lời kiểm thử có nguồn.")).toBeVisible();
   });
 
@@ -128,7 +132,7 @@ test.describe("isolated PriceApp integration", () => {
     await page.locator("#email").fill(employeeEmail);
     await page.locator("#password").fill(employeePassword);
     const catalogResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/catalog"));
-    await page.locator('form button[type="submit"]').click();
+    await page.getByRole("button", { name: "ĐĂNG NHẬP" }).click();
     await expect(page.locator("#product-search")).toBeVisible();
     expect((await catalogResponse).status()).toBe(200);
 

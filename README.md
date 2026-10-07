@@ -4,7 +4,7 @@ PriceApp là ứng dụng quầy hàng mobile-first để tìm vật tư, xem gi
 
 ## Chạy local
 
-Yêu cầu Node.js 20.9+ và npm. Cài dependency một lần ở thư mục gốc:
+Yêu cầu Node.js 22.12+ và npm. Cài dependency một lần ở thư mục gốc:
 
 ```powershell
 npm ci
@@ -33,13 +33,13 @@ Khi cần API tự khởi động lại sau mỗi lần sửa file, dùng `npm r
 
 Trên Windows, root runner dừng đúng tiến trình con do nó tạo và đợi chúng thoát trước khi kết thúc. Trên Unix, runner dùng `concurrently`. Có thể chạy `npm run test:dev-runner` để kiểm tra dừng tiến trình con khi một dịch vụ lỗi hoặc khi nhấn Ctrl+C.
 
-Các lệnh kiểm tra ở root áp dụng cho cả hai workspace: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. `npm run openapi:check` phát hiện contract API đã sinh bị cũ; `npm run check` chạy toàn bộ gates đó. Lệnh `npm run test:e2e` chỉ bật server trên port riêng khi có đủ secrets cho project Supabase test biệt lập. Nếu chưa cấu hình, Playwright đánh dấu các case authenticated là skipped; nó không dùng tệp `.env.local` của ứng dụng làm tài khoản test.
+Các lệnh kiểm tra ở root áp dụng cho cả hai workspace: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. `npm run openapi:check` phát hiện contract API đã sinh bị cũ; `npm run check` chạy toàn bộ gates đó. Lệnh `npm run test:e2e` build hai workspace và chạy các case desktop/mobile với auth/API giả lập trên port riêng; các case authenticated cần secrets cho một project Supabase test biệt lập, nếu thiếu thì chúng được bỏ qua. Lệnh này không dùng tệp `.env.local` của ứng dụng làm tài khoản test.
 
 ## Cấu hình và vận hành
 
 - Biến frontend: xem [frontend/.env.example](frontend/.env.example). Chỉ Supabase URL/publishable key và URL API được phép xuất hiện trong browser.
 - Biến API và RAG: xem [backend/.env.example](backend/.env.example). Backend xác thực bearer token, dùng client theo token gọi Supabase để giữ RLS.
-- Cấu hình local, CORS, triển khai tách rời, xử lý lỗi đăng nhập và rollback: [docs/workspace-runbook.md](docs/workspace-runbook.md).
+- Cấu hình local, CORS, triển khai tách rời, xử lý lỗi đăng nhập và rollback RAG tạm thời: [docs/workspace-runbook.md](docs/workspace-runbook.md).
 - Luồng RAG, migrations, mô hình và quy trình duyệt nội dung: [RAG_SETUP.md](RAG_SETUP.md).
 - Ranh giới hệ thống: [docs/architecture.md](docs/architecture.md).
 

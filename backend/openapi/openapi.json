@@ -2313,11 +2313,148 @@
                     },
                     "items": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "variant": {
+                            "type": "string"
+                          },
+                          "verificationStatus": {
+                            "type": "string",
+                            "enum": [
+                              "verified",
+                              "needs_review",
+                              "unreadable",
+                              "sample"
+                            ]
+                          },
+                          "sourcePages": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "prices": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "priceType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "retail",
+                                    "wholesale",
+                                    "dealer"
+                                  ]
+                                },
+                                "minimumQuantity": {
+                                  "type": "number"
+                                },
+                                "packagingName": {
+                                  "type": "string"
+                                },
+                                "packageQuantity": {
+                                  "type": "number"
+                                },
+                                "unit": {
+                                  "type": "string"
+                                },
+                                "packageNote": {
+                                  "type": "string"
+                                },
+                                "priceList": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "supplier": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "verificationStatus": {
+                                  "type": "string",
+                                  "enum": [
+                                    "verified",
+                                    "needs_review",
+                                    "unreadable",
+                                    "sample"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "amount",
+                                "priceType",
+                                "minimumQuantity",
+                                "packagingName",
+                                "packageQuantity",
+                                "unit",
+                                "packageNote",
+                                "priceList",
+                                "supplier",
+                                "verificationStatus"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "productName",
+                          "category",
+                          "variant",
+                          "verificationStatus",
+                          "sourcePages",
+                          "prices"
+                        ]
+                      }
                     },
                     "sources": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "pageNumber": {
+                            "type": "number"
+                          },
+                          "excerpt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "pageNumber",
+                          "excerpt"
+                        ]
+                      }
                     },
                     "retrieval": {
                       "type": "object",
@@ -2330,14 +2467,55 @@
                         },
                         "embeddingModel": {
                           "type": "string"
+                        },
+                        "trace": {
+                          "type": "object",
+                          "properties": {
+                            "question": {
+                              "type": "string"
+                            },
+                            "chunkIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "variantIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "priceIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "answer": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "question",
+                            "chunkIds",
+                            "variantIds",
+                            "priceIds",
+                            "answer"
+                          ]
                         }
                       },
                       "required": [
                         "vectorChunks",
                         "lexicalProducts",
                         "embeddingModel"
-                      ],
-                      "additionalProperties": {}
+                      ]
                     }
                   },
                   "required": [
@@ -2600,7 +2778,53 @@
                   "properties": {
                     "pages": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "sourcePageId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "pageNumber": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "extractedText": {
+                            "type": "string"
+                          },
+                          "reviewStatus": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "approved",
+                              "rejected"
+                            ]
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "sourcePageId",
+                          "pageNumber",
+                          "title",
+                          "extractedText",
+                          "reviewStatus",
+                          "revision"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -3134,7 +3358,56 @@
                   "properties": {
                     "run": {
                       "anyOf": [
-                        {},
+                        {
+                          "type": "object",
+                          "properties": {
+                            "runId": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "running",
+                                "failed",
+                                "completed"
+                              ]
+                            },
+                            "checkpoint": {
+                              "type": "number"
+                            },
+                            "chunks": {
+                              "type": "number"
+                            },
+                            "indexed": {
+                              "type": "number"
+                            },
+                            "reused": {
+                              "type": "number"
+                            },
+                            "removed": {
+                              "type": "number"
+                            },
+                            "embeddingModel": {
+                              "type": "string"
+                            },
+                            "contentHash": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "runId",
+                            "status",
+                            "checkpoint",
+                            "chunks",
+                            "indexed",
+                            "reused",
+                            "removed",
+                            "embeddingModel",
+                            "contentHash"
+                          ]
+                        },
                         {
                           "type": "null"
                         }
@@ -3382,9 +3655,17 @@
                       "maximum": 9007199254740991
                     },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "running",
+                        "failed",
+                        "completed"
+                      ]
                     },
                     "checkpoint": {
+                      "type": "number"
+                    },
+                    "chunks": {
                       "type": "number"
                     },
                     "indexed": {
@@ -3396,8 +3677,11 @@
                     "removed": {
                       "type": "number"
                     },
-                    "chunks": {
-                      "type": "number"
+                    "embeddingModel": {
+                      "type": "string"
+                    },
+                    "contentHash": {
+                      "type": "string"
                     },
                     "pages": {
                       "type": "number"
@@ -3405,29 +3689,23 @@
                     "variants": {
                       "type": "number"
                     },
-                    "embeddingModel": {
-                      "type": "string"
-                    },
                     "embeddingDimensions": {
                       "type": "number"
-                    },
-                    "contentHash": {
-                      "type": "string"
                     }
                   },
                   "required": [
                     "runId",
                     "status",
                     "checkpoint",
+                    "chunks",
                     "indexed",
                     "reused",
                     "removed",
-                    "chunks",
+                    "embeddingModel",
+                    "contentHash",
                     "pages",
                     "variants",
-                    "embeddingModel",
-                    "embeddingDimensions",
-                    "contentHash"
+                    "embeddingDimensions"
                   ]
                 }
               }
@@ -3670,84 +3948,131 @@
                       "type": "string"
                     },
                     "database": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "ok": {
+                              "type": "boolean",
+                              "const": false
+                            },
+                            "detail": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "ok",
+                            "detail"
+                          ]
                         },
-                        "detail": {
-                          "type": "string"
-                        },
-                        "count": {
-                          "type": "number"
-                        },
-                        "dimensions": {
-                          "type": "number"
-                        },
-                        "model": {
-                          "type": "string"
-                        },
-                        "fingerprint": {
-                          "type": "string"
+                        {
+                          "type": "object",
+                          "properties": {
+                            "ok": {
+                              "type": "boolean",
+                              "const": true
+                            },
+                            "detail": {
+                              "type": "string"
+                            },
+                            "count": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "ok",
+                            "detail",
+                            "count"
+                          ]
                         }
-                      },
-                      "required": [
-                        "ok",
-                        "detail"
                       ]
                     },
                     "embedding": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "ok": {
+                              "type": "boolean",
+                              "const": false
+                            },
+                            "detail": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "ok",
+                            "detail"
+                          ]
                         },
-                        "detail": {
-                          "type": "string"
-                        },
-                        "count": {
-                          "type": "number"
-                        },
-                        "dimensions": {
-                          "type": "number"
-                        },
-                        "model": {
-                          "type": "string"
-                        },
-                        "fingerprint": {
-                          "type": "string"
+                        {
+                          "type": "object",
+                          "properties": {
+                            "ok": {
+                              "type": "boolean",
+                              "const": true
+                            },
+                            "detail": {
+                              "type": "string"
+                            },
+                            "model": {
+                              "type": "string"
+                            },
+                            "dimensions": {
+                              "type": "number"
+                            },
+                            "fingerprint": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "ok",
+                            "detail",
+                            "model",
+                            "dimensions",
+                            "fingerprint"
+                          ]
                         }
-                      },
-                      "required": [
-                        "ok",
-                        "detail"
                       ]
                     },
                     "chat": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "ok": {
+                              "type": "boolean",
+                              "const": false
+                            },
+                            "detail": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "ok",
+                            "detail"
+                          ]
                         },
-                        "detail": {
-                          "type": "string"
-                        },
-                        "count": {
-                          "type": "number"
-                        },
-                        "dimensions": {
-                          "type": "number"
-                        },
-                        "model": {
-                          "type": "string"
-                        },
-                        "fingerprint": {
-                          "type": "string"
+                        {
+                          "type": "object",
+                          "properties": {
+                            "ok": {
+                              "type": "boolean",
+                              "const": true
+                            },
+                            "detail": {
+                              "type": "string"
+                            },
+                            "model": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "ok",
+                            "detail",
+                            "model"
+                          ]
                         }
-                      },
-                      "required": [
-                        "ok",
-                        "detail"
                       ]
                     }
                   },
@@ -3937,102 +4262,180 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "provider": {
-                      "type": "string"
-                    },
-                    "database": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
                         "ok": {
                           "type": "boolean"
                         },
-                        "detail": {
+                        "provider": {
                           "type": "string"
                         },
-                        "count": {
-                          "type": "number"
+                        "database": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "ok": {
+                                  "type": "boolean",
+                                  "const": false
+                                },
+                                "detail": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "ok",
+                                "detail"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "ok": {
+                                  "type": "boolean",
+                                  "const": true
+                                },
+                                "detail": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "ok",
+                                "detail",
+                                "count"
+                              ]
+                            }
+                          ]
                         },
-                        "dimensions": {
-                          "type": "number"
+                        "embedding": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "ok": {
+                                  "type": "boolean",
+                                  "const": false
+                                },
+                                "detail": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "ok",
+                                "detail"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "ok": {
+                                  "type": "boolean",
+                                  "const": true
+                                },
+                                "detail": {
+                                  "type": "string"
+                                },
+                                "model": {
+                                  "type": "string"
+                                },
+                                "dimensions": {
+                                  "type": "number"
+                                },
+                                "fingerprint": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "ok",
+                                "detail",
+                                "model",
+                                "dimensions",
+                                "fingerprint"
+                              ]
+                            }
+                          ]
                         },
-                        "model": {
-                          "type": "string"
-                        },
-                        "fingerprint": {
-                          "type": "string"
+                        "chat": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "ok": {
+                                  "type": "boolean",
+                                  "const": false
+                                },
+                                "detail": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "ok",
+                                "detail"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "ok": {
+                                  "type": "boolean",
+                                  "const": true
+                                },
+                                "detail": {
+                                  "type": "string"
+                                },
+                                "model": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "ok",
+                                "detail",
+                                "model"
+                              ]
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "ok",
-                        "detail"
+                        "provider",
+                        "database",
+                        "embedding",
+                        "chat"
                       ]
                     },
-                    "embedding": {
+                    {
                       "type": "object",
                       "properties": {
-                        "ok": {
-                          "type": "boolean"
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
                         },
-                        "detail": {
-                          "type": "string"
-                        },
-                        "count": {
-                          "type": "number"
-                        },
-                        "dimensions": {
-                          "type": "number"
-                        },
-                        "model": {
-                          "type": "string"
-                        },
-                        "fingerprint": {
+                        "requestId": {
                           "type": "string"
                         }
                       },
                       "required": [
-                        "ok",
-                        "detail"
-                      ]
-                    },
-                    "chat": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
-                        },
-                        "detail": {
-                          "type": "string"
-                        },
-                        "count": {
-                          "type": "number"
-                        },
-                        "dimensions": {
-                          "type": "number"
-                        },
-                        "model": {
-                          "type": "string"
-                        },
-                        "fingerprint": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "ok",
-                        "detail"
+                        "error",
+                        "requestId"
                       ]
                     }
-                  },
-                  "required": [
-                    "ok",
-                    "provider",
-                    "database",
-                    "embedding",
-                    "chat"
                   ]
                 }
               }
