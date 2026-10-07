@@ -51,10 +51,8 @@ jobs:
           node-version: 22.12.0
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-        working-directory: frontend
+      - run: npm exec --workspace @price-app/frontend -- playwright install --with-deps chromium
       - run: npm run test:e2e
-        working-directory: frontend
         env:
           PRICEAPP_E2E_ENABLED: "true"
           PRICEAPP_E2E_PROJECT_REF: ${{ secrets.PRICEAPP_E2E_PROJECT_REF }}
