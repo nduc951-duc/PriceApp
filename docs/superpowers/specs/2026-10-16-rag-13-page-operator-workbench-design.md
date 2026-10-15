@@ -16,7 +16,7 @@ Prepare all 13 photographed price-book pages for RAG through a repeatable OCR an
 
 ## Workflow
 
-1. Load all source-page records and show the 13-page queue with review/index state and source image.
+1. Load all source-page records and show the 13-page queue with review state and source image. Show index state to owners, because index diagnostics and rebuild controls remain owner-only.
 2. Offer a sequential “OCR pages without a transcript” action. Process one image at a time with the configured Ollama OCR model so the local inference host is not flooded.
 3. For each successful page, normalize and chunk the OCR text with the existing record chunker, then persist it as a draft. Show per-page progress and preserve successful drafts if a later page fails. Let the queue continue after a page-level failure and report which page needs a retry.
 4. Never batch-overwrite an approved/rejected page or a non-empty draft. Report these as skipped. A deliberate re-scan is a separate page-level action and must retain the existing text until the user chooses to replace it.
