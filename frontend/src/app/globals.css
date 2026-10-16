@@ -73,6 +73,8 @@ h1,h2,h3,.pos-brand-copy b { font-family:"Segoe UI", ui-sans-serif, system-ui, s
 .pos-search-field { display:flex; align-items:center; gap:9px; min-height:52px; border:2px solid var(--green); border-radius:9px; padding:0 11px; color:var(--green); background:#fff; }
 .pos-search-field:focus-within { box-shadow:0 0 0 3px rgba(23,79,54,.12); }
 .pos-search-field input { min-width:0; flex:1; height:48px; border:0; outline:0; color:var(--ink); font-size:15px; background:transparent; }
+.pos-search-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:11px; }
+.pos-search-filters select { min-height:44px; border-color:#d1d5db; border-radius:7px; background-color:#fff; color:#111827; font-size:13px; }
 .pos-search-field kbd,.pos-open-invoice kbd { padding:4px 6px; border:1px solid #d7d8d1; border-radius:4px; color:#4b5563; background:#ffffff; font:600 10px "Consolas",monospace; }
 .pos-quick-search { display:flex; gap:6px; overflow:auto; margin-top:11px; }
 .pos-quick-search button { flex-shrink:0; border:1px solid #e5e7eb; border-radius:6px; padding:6px 9px; background:#fcf9f0; color:#374151; font-size:11px; }

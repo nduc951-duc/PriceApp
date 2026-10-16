@@ -22,6 +22,38 @@ function fixture(role = "viewer", authResult?: { data: { user: { id: string } | 
 }
 
 describe("versioned RAG route boundaries", () => {
+  it("allows an unauthenticated public price question without opening the staff endpoint", async () => {
+    vi.stubEnv("RAG_EMBEDDING_MODEL", "");
+    const { app } = fixture();
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/v1/public/rag/query", payload: { question: "Giá tắc kê sắt 6x50?" } });
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({ error: { code: "RAG_UNAVAILABLE" } });
+    } finally { await app.close(); vi.unstubAllEnvs(); }
+  });
+
+  it("accepts prior question context for a guest clarification reply", async () => {
+    vi.stubEnv("RAG_EMBEDDING_MODEL", "");
+    const { app } = fixture();
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/v1/public/rag/query", payload: {
+        question: "Giá 1T2", previousQuestion: "Bánh xe giá bao nhiêu?",
+      } });
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({ error: { code: "RAG_UNAVAILABLE" } });
+    } finally { await app.close(); vi.unstubAllEnvs(); }
+  });
+
+  it("rejects an unauthenticated public query with a blank question", async () => {
+    const { app, dataAccess } = fixture();
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/v1/public/rag/query", payload: { question: " " } });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: { code: "INVALID_INPUT" } });
+      expect(dataAccess).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+
   it.each([...adminEndpoints, { method: "POST", url: "/api/v1/rag/query" }, { method: "POST", url: "/api/v1/admin/rag/preview" }] as const)("requires auth for $method $url", async endpoint => {
     const { app } = fixture();
     try {

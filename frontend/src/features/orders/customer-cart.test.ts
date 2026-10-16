@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addToCustomerCart, customerCartSubtotal, setCustomerCartQuantity, type CustomerCartLine, type PublicPrice } from "./customer-cart";
 
-const retail: PublicPrice = { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "retail", minimumQuantity: 1, price: 15000 };
+const retail: PublicPrice = { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", productCode: null, aliases: [], packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "retail", minimumQuantity: 1, price: 15000 };
 const wholesale: PublicPrice = { ...retail, priceId: 22, priceType: "wholesale", minimumQuantity: 5, price: 12000 };
 
 describe("customer cart", () => {

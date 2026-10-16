@@ -7,7 +7,7 @@ const id = z.number().int().positive();
 const text = z.string();
 const role = z.enum(["owner", "editor", "viewer"]);
 export const errorResponse = z.object({ error: z.object({ code: text, message: text }), requestId: text });
-const catalogEntry = z.object({ categoryId: id, productId: id, variantId: id, name: text, category: text, spec: text, displayName: text, sourcePages: z.array(z.number()), sourceFiles: z.array(text) });
+const catalogEntry = z.object({ categoryId: id, productId: id, variantId: id, name: text, category: text, spec: text, displayName: text, productCode: text.nullable(), aliases: z.array(text), sourcePages: z.array(z.number()), sourceFiles: z.array(text) });
 const catalogPrice = z.object({
   id, priceId: id, categoryId: id, productId: id, variantId: id, packagingId: id,
   name: text, category: text, variantDisplayName: text, spec: text, variantSpec: text,
@@ -28,6 +28,10 @@ const catalogUpdateResponse = z.object({
 });
 const signedUrlResponse = z.object({ signedUrl: z.url(), expiresIn: z.literal(300) });
 const ragQueryBody = z.strictObject({ question: z.string().trim().min(1).max(1000), conversationId: z.uuid().optional() });
+const publicRagQueryBody = z.strictObject({
+  question: z.string().trim().min(1).max(1000),
+  previousQuestion: z.string().trim().max(1000).optional(),
+});
 const conversationIdParams = z.strictObject({ conversationId: z.uuid() });
 const conversation = z.object({ id: z.uuid(), created_at: text });
 const conversationListResponse = z.object({ conversations: z.array(conversation) });
@@ -64,8 +68,8 @@ const ragItem = z.object({
   sourcePages: z.array(z.number()), prices: z.array(ragPrice),
 });
 const ragSource = z.object({
-  pageNumber: id, chunkId: id, chunkKey: text, sourceRevision: id,
-  sourceSpan: z.object({ start: z.number().int().nonnegative(), end: z.number().int().positive() }),
+  pageNumber: id, chunkId: id, chunkKey: text, sourceRevision: id.nullable(),
+  sourceSpan: z.object({ start: z.number().int().nonnegative(), end: z.number().int().positive() }).nullable(),
   excerpt: text, evidenceKind: z.enum(["approved_page_ocr", "verified_catalog"]),
   verifiedVariantId: id.optional(), verifiedPriceId: id.optional(),
 });
@@ -117,6 +121,7 @@ export const apiContracts = [
   { method: "post", path: "/api/v1/catalog/update", operationId: "updateCatalogItem", summary: "Cập nhật mặt hàng", auth: true, body: catalogUpdateSchema, response: { 200: catalogUpdateResponse } },
   { method: "post", path: "/api/v1/prices/undo", operationId: "undoPrice", summary: "Hoàn tác giá có kiểm toán", auth: true, body: priceUndoSchema, response: { 200: priceWriteResponse } },
   { method: "post", path: "/api/v1/rag/query", operationId: "queryKnowledgeBase", summary: "Tra cứu tài liệu và giá", auth: true, body: ragQueryBody, response: { 200: ragQueryResponse } },
+  { method: "post", path: "/api/v1/public/rag/query", operationId: "queryPublicKnowledgeBase", summary: "Khách tra cứu giá từ catalog công khai đã xác minh", auth: false, body: publicRagQueryBody, response: { 200: ragQueryResponse } },
   { method: "post", path: "/api/v1/rag/conversations", operationId: "createRagConversation", summary: "Tạo hội thoại RAG của người dùng", auth: true, response: { 200: conversation } },
   { method: "get", path: "/api/v1/rag/conversations", operationId: "listRagConversations", summary: "Liệt kê hội thoại RAG của người dùng", auth: true, response: { 200: conversationListResponse } },
   { method: "get", path: "/api/v1/rag/conversations/{conversationId}", operationId: "readRagConversation", summary: "Đọc tin nhắn hội thoại RAG", auth: true, params: conversationIdParams, response: { 200: conversationMessagesResponse } },

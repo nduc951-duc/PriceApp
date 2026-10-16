@@ -13,6 +13,7 @@ type Variant = {
   id: number; display_name: string; raw_specification: string | null; search_text: string; attributes: Record<string, unknown>;
   products: { name: string; categories: { name: string } | null; product_aliases: { alias: string }[] | null } | null;
   variant_sources: { source_page_id: number; source_pages: { page_number: number | null; verification_status: string } | null }[];
+  packaging_options?: { name: string; quantity: number | string; base_unit: string; note: string | null }[];
 };
 type DraftChunk = { chunk_key: string; source_page_id: number; source_revision: number | null; product_variant_id: number | null; chunk_index: number; chunker_version: string; source_start: number | null; source_end: number | null; content: string; content_hash: string; metadata: Record<string, unknown> };
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -77,6 +78,8 @@ export async function indexRag(client: SupabaseClient) {
       const product = variant.products;
       if (!product) continue;
       const aliases = product.product_aliases?.map((item) => item.alias).filter(Boolean) ?? [];
+      const packages = [...(variant.packaging_options ?? [])]
+        .sort((left, right) => left.name.localeCompare(right.name) || Number(left.quantity) - Number(right.quantity) || left.base_unit.localeCompare(right.base_unit));
       const text = [
         `Danh mục: ${product.categories?.name ?? "Vật tư"}`,
         `Tên sản phẩm: ${product.name}`,
@@ -84,6 +87,7 @@ export async function indexRag(client: SupabaseClient) {
         `Quy cách: ${variant.raw_specification ?? variant.display_name}`,
         `Thông tin nhận diện: ${variant.search_text}`,
         Object.keys(variant.attributes ?? {}).length ? `Thuộc tính: ${JSON.stringify(variant.attributes)}` : "",
+        packages.length ? `Đóng gói/đơn vị: ${packages.map((pack) => `${pack.name} · ${new Intl.NumberFormat("vi-VN").format(Number(pack.quantity))} ${pack.base_unit}${pack.note ? ` · ${pack.note}` : ""}`).join("; ")}` : "",
       ].filter(Boolean).join("\n");
       const linkedPages = variant.variant_sources.length ? variant.variant_sources : [{ source_page_id: 0, source_pages: null }];
       for (const source of linkedPages) {

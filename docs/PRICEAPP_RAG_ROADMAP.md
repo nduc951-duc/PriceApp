@@ -273,6 +273,8 @@ Chưa ưu tiên: GraphRAG, nhiều agent, fine-tuning, nhiều vector DB, thanh 
 
 ## 6. User stories và các lần triển khai
 
+> Bộ yêu cầu mới nhất về độ khớp mặt hàng/quy cách, hỏi làm rõ, thiếu dữ liệu, so sánh và hiển thị nguồn được duy trì riêng tại [PRICE_QUERY_USER_STORIES.md](PRICE_QUERY_USER_STORIES.md). Các mã US-01–US-05 trong tài liệu đó thuộc epic tra cứu giá và không thay thế các mã lịch sử bên dưới.
+
 Mỗi “lần” là một phần việc có thể review/demo độc lập; không hứa hoàn thành trong một chat. Nếu vượt một buổi triển khai, tách theo mã task. Thời gian còn phụ thuộc model/hardware, quyền DB và việc duyệt nguồn. Chưa biết deadline/team size nên không gán lịch tuần cứng.
 
 ---

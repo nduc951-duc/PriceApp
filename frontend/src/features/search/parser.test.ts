@@ -17,4 +17,12 @@ describe("Vietnamese search", () => {
   it("applies normalized Vietnamese aliases in the catalog matcher", () => {
     expect(matchesCatalogQuery("bu long 8 li", "Bulong 8ly")).toBe(true);
   });
+  it("matches accentless catalog text without fuzzy substituting a similar item", () => {
+    expect(matchesCatalogQuery("do man khoa dl 1t", "Bánh xe Đỏ mận khóa ĐL 1T")).toBe(true);
+    expect(matchesCatalogQuery("bánhh xe", "Bánh xe")).toBe(false);
+  });
+  it("matches exact SKU and catalog alias terms", () => {
+    expect(matchesCatalogQuery("tk-650", "Tắc kê sắt 6x50 TK-650 Tắc kê đạn")).toBe(true);
+    expect(matchesCatalogQuery("tac ke dan", "Tắc kê sắt 6x50 TK-650 Tắc kê đạn")).toBe(true);
+  });
 });

@@ -7,7 +7,7 @@ import { embedTexts, embeddingModel, generateGroundedAnswer, RagProviderUnavaila
 import { rankVariantIds } from "../rag/rank.js";
 import { priceAnswer } from "../rag/price-answer.js";
 import { resolveFollowUpQuestion, understandQuery, toHardFilters } from "../rag/query-understanding.js";
-import { matchesExplicitPackage, matchesExplicitQuery } from "../rag/candidate-filters.js";
+import { comparisonTargets, matchesExplicitPackage, matchesExplicitQuery, matchesNamedCandidate } from "../rag/candidate-filters.js";
 import { buildCitations } from "../rag/citations.js";
 
 
@@ -20,16 +20,18 @@ type CatalogRow = {
 };
 type EligibleSource = { product_variant_id: number; source_page_id: number; page_number: number | null };
 
-export async function queryRag(body: unknown, client: SupabaseClient, context: { previousQuestion?: string } = {}) {
-  const chunksRepo = ragChunksRepository(client);
+export async function queryRag(body: unknown, client: SupabaseClient, context: { previousQuestion?: string } = {}, options: { publicCatalogOnly?: boolean } = {}) {
+  const chunksRepo = ragChunksRepository(client, options.publicCatalogOnly);
   const pagesRepo = ragPagesRepository(client);
-  const catalogRepo = ragCatalogRepository(client);
+  const catalogRepo = ragCatalogRepository(client, options.publicCatalogOnly);
   const input = (typeof body === "object" && body !== null ? body : {}) as { question?: unknown };
   const originalQuestion = typeof input.question === "string" ? input.question.trim() : "";
   if (!originalQuestion || originalQuestion.length > 1000) throw new ApiError(400, "INVALID_INPUT", "Nhập câu hỏi từ 1 đến 1.000 ký tự.");
   const question = resolveFollowUpQuestion(context.previousQuestion, originalQuestion);
   const understood = understandQuery(question);
   const hardFilters = toHardFilters(understood);
+  const asksForPrice = /giá|bao nhiêu|báo giá|đồng|vnđ|rẻ|đắt|mắc/i.test(question) && !/trang nào|nguồn nào|trích dẫn/i.test(question);
+  const comparisons = asksForPrice ? comparisonTargets(question) : null;
   const lexicalQuery = [...understood.aliases, ...understood.nameTerms].join(" ") || question;
   if (understood.tierConflict) {
     return {
@@ -56,14 +58,20 @@ export async function queryRag(body: unknown, client: SupabaseClient, context: {
   if (vectorError) throw new Error("RAG repository unavailable");
   if (lexicalError) throw new Error("RAG repository unavailable");
   let chunks = ((vectorData ?? []) as unknown as Match[]).filter((item) => item.similarity >= 0.20);
-  let lexicalIds = ((lexicalData ?? []) as unknown as Array<{ id: number; result_type?: string; relevance?: number }>).filter((row) => row.result_type === "variant").map((row) => Number(row.id)).filter(Number.isFinite);
-  const ids = rankVariantIds(chunks.map((chunk) => chunk.product_variant_id).filter((id): id is number => id !== null), lexicalIds);
+  const lexicalRows = ((lexicalData ?? []) as unknown as Array<{ id: number; result_type?: string; relevance?: number }>).filter((row) => row.result_type === "variant");
+  let lexicalIds = lexicalRows.map((row) => Number(row.id)).filter(Number.isFinite);
+  const lexicalRelevance = new Map(lexicalRows.map((row) => [Number(row.id), Number(row.relevance ?? 0)]));
+  const ids = rankVariantIds(
+    chunks.map((chunk) => chunk.product_variant_id).filter((id): id is number => id !== null),
+    lexicalIds,
+    options.publicCatalogOnly ? 8 : 12,
+  );
 
   let catalog: CatalogRow[] = [];
   const eligiblePages = new Map<number, number[]>();
   const sourceIds = [...new Set(chunks.map((chunk) => chunk.source_page_id))];
   type SourcePageLookup = Pick<Awaited<ReturnType<typeof pagesRepo.numbers>>, "data" | "error">;
-  const sourcePagesPromise: Promise<SourcePageLookup> = sourceIds.length ? Promise.resolve(pagesRepo.numbers(sourceIds)) : Promise.resolve({ data: [], error: null });
+  const sourcePagesPromise: Promise<SourcePageLookup> = !options.publicCatalogOnly && sourceIds.length ? Promise.resolve(pagesRepo.numbers(sourceIds)) : Promise.resolve({ data: [], error: null });
   let sourcePages: SourcePageLookup;
   if (ids.length) {
     const [{ data, error }, { data: sourceData, error: sourceError }, pageResult] = await Promise.all([
@@ -84,16 +92,23 @@ export async function queryRag(body: unknown, client: SupabaseClient, context: {
   } else sourcePages = await sourcePagesPromise;
 
   const now = Date.now();
-  if (Object.keys(hardFilters).length > 0) {
-    catalog = catalog.filter((row) => matchesExplicitQuery({
+  if (Object.keys(hardFilters).length > 0 || asksForPrice || understood.nameTerms.length > 0 || understood.aliases.length > 0) {
+    catalog = catalog.filter((row) => {
+      const candidate = {
       productName: row.products?.name ?? row.display_name,
       variant: `${row.display_name} ${row.raw_specification ?? ""}`,
+      aliases: row.products?.product_aliases?.map((alias) => alias.alias) ?? [],
       packages: row.packaging_options.map((pack) => ({
         name: pack.name,
         unit: pack.base_unit,
         activeTiers: [...new Set(pack.prices.filter((price) => price.active && Date.parse(price.valid_from) <= now && (!price.valid_to || Date.parse(price.valid_to) >= now)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
       })),
-    }, question));
+      };
+      const targetMatch = comparisons
+        ? comparisons.some((target) => matchesExplicitQuery(candidate, target) && matchesNamedCandidate(candidate, target, lexicalRelevance.get(row.id) ?? 0))
+        : matchesExplicitQuery(candidate, question) && matchesNamedCandidate(candidate, question, lexicalRelevance.get(row.id) ?? 0);
+      return targetMatch;
+    });
     const allowed = new Set(catalog.map((row) => row.id));
     chunks = chunks.filter((chunk) => chunk.product_variant_id !== null && allowed.has(chunk.product_variant_id));
     lexicalIds = lexicalIds.filter((id) => allowed.has(id));
@@ -119,6 +134,29 @@ export async function queryRag(body: unknown, client: SupabaseClient, context: {
     return { id: row.id, productName: row.products?.name ?? row.display_name, category: row.products?.categories?.name ?? "Vật tư", variant: row.raw_specification ?? row.display_name, verificationStatus: row.verification_status, sourcePages: pages, prices };
   });
 
+  const ambiguousPackageNames = items.length === 1 && asksForPrice && !understood.package && !understood.unit
+    ? [...new Set(items[0].prices.map((price) => price.packagingName))]
+    : [];
+  if (asksForPrice && !comparisons && (items.length > 1 || ambiguousPackageNames.length > 1)) {
+    const byCategory = new Map<string, typeof items>();
+    for (const item of items) byCategory.set(item.category, [...(byCategory.get(item.category) ?? []), item]);
+    const relevantGroup = [...byCategory.entries()].sort((left, right) => right[1].length - left[1].length)[0];
+    const groupItems = relevantGroup?.[1] ?? items;
+    const candidates = ambiguousPackageNames.length > 1
+      ? ambiguousPackageNames.slice(0, 3)
+      : [...new Set(groupItems.map((item) => item.variant))].slice(0, 3);
+    const groupLabel = relevantGroup?.[0] ?? items[0]?.productName ?? "mặt hàng";
+    return {
+      status: "clarify" as const,
+      clarification: ambiguousPackageNames.length > 1 ? "Chọn quy cách đóng gói" : "Chọn quy cách sản phẩm",
+      answer: ambiguousPackageNames.length > 1
+        ? `Mặt hàng ${groupLabel} có nhiều cách đóng gói. Bạn cần loại nào: ${candidates.join("; ")}${ambiguousPackageNames.length > candidates.length ? "; …" : ""}?`
+        : `Có nhiều quy cách thuộc nhóm ${groupLabel}. Bạn cần loại nào: ${candidates.join("; ")}${[...new Set(groupItems.map((item) => item.variant))].length > candidates.length ? "; …" : ""}?`,
+      items: [], sources: [],
+      retrieval: { vectorChunks: chunks.length, lexicalProducts: lexicalIds.length, embeddingModel: model },
+    };
+  }
+
   const evidence = [
     ...catalog.slice(0, 8).map((row) => {
       const item = items.find((candidate) => candidate.id === row.id)!;
@@ -135,9 +173,22 @@ export async function queryRag(body: unknown, client: SupabaseClient, context: {
       items: [], sources: [], retrieval: { vectorChunks: 0, lexicalProducts: 0, embeddingModel: model },
     };
   }
-  const asksForPrice = /giá|bao nhiêu|báo giá|giá sỉ|giá lẻ|đồng|vnđ/i.test(question) && !/trang nào|nguồn nào|trích dẫn/i.test(question);
+  const missingComparisonTargets = comparisons?.filter((target) => {
+    const row = catalog.find((candidate) => matchesExplicitQuery({
+      productName: candidate.products?.name ?? candidate.display_name,
+      variant: `${candidate.display_name} ${candidate.raw_specification ?? ""}`,
+      aliases: candidate.products?.product_aliases?.map((alias) => alias.alias) ?? [],
+      packages: candidate.packaging_options.map((pack) => ({
+        name: pack.name,
+        unit: pack.base_unit,
+        activeTiers: [...new Set(pack.prices.filter((price) => price.active && Date.parse(price.valid_from) <= now && (!price.valid_to || Date.parse(price.valid_to) >= now)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
+      })),
+    }, target));
+    if (!row) return true;
+    return !items.find((item) => item.id === row.id)?.prices.length;
+  }) ?? [];
   const answer = asksForPrice
-    ? priceAnswer(items)
+    ? [priceAnswer(items), ...missingComparisonTargets.map((target) => `Chưa tìm thấy mặt hàng hoặc giá hiện hành phù hợp cho: ${target}.`)].filter(Boolean).join("\n")
     : await generateGroundedAnswer({ question, evidence: uniqueEvidence }).catch((error: unknown) => {
       if (error instanceof RagProviderUnavailableError) throw new ApiError(503, "RAG_UNAVAILABLE", "Dịch vụ RAG tạm thời chưa sẵn sàng.");
       throw error;
@@ -146,13 +197,13 @@ export async function queryRag(body: unknown, client: SupabaseClient, context: {
     pageNumber: pageNumbers.get(chunk.source_page_id) ?? (typeof chunk.metadata.page_number === "number" ? chunk.metadata.page_number : null),
     chunkId: chunk.id,
     chunkKey: chunk.chunk_key,
-    sourceRevision: chunk.source_revision,
+    sourceRevision: chunk.source_revision ?? null,
     sourceSpan: chunk.source_start !== null && chunk.source_end !== null ? { start: chunk.source_start, end: chunk.source_end } : null,
     excerpt: chunk.content,
     evidenceKind: chunk.metadata.kind === "approved_page_ocr" || chunk.metadata.kind === "verified_catalog" ? chunk.metadata.kind : null,
     verifiedVariantId: chunk.product_variant_id,
   })));
-  const status = asksForPrice && !items.some((item) => item.prices.length > 0) ? "insufficient_evidence" : "answered";
+  const status = asksForPrice && (!items.some((item) => item.prices.length > 0) || missingComparisonTargets.length > 0) ? "insufficient_evidence" : "answered";
   const trace = { question: originalQuestion, chunkIds: chunks.map((chunk) => chunk.id), variantIds: items.map((item) => item.id), priceIds: items.flatMap((item) => item.prices.map((price) => price.id)), answer };
-  return { status, answer, items, sources, retrieval: { vectorChunks: chunks.length, lexicalProducts: lexicalIds.length, embeddingModel: model, trace } };
+  return { status, answer, items: asksForPrice ? items : [], sources, retrieval: { vectorChunks: chunks.length, lexicalProducts: lexicalIds.length, embeddingModel: model, trace } };
 }

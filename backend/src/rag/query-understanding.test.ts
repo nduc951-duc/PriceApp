@@ -45,10 +45,18 @@ describe("Vietnamese query understanding", () => {
     expect(parsed.rawQuery).toBe("Tắc kê 2F5 1T5 1008 A300 6x50 lấy 1,5 kg giá đại lý");
   });
 
+  it("recognizes letter-number specification codes such as 1T as complete tokens", () => {
+    expect(understandQuery("Giá bánh xe Đỏ mận khóa ĐL 1T").specCodes).toEqual(["1T"]);
+  });
+
   it("does not add hard filters for attributes absent from the question", () => {
     const parsed = understandQuery("Tắc kê");
     expect(toHardFilters(parsed)).toEqual({});
     expect(matchesHardFilters({ dimensions: ["6x50"], material: "sắt", package: "bịch" }, parsed)).toBe(true);
+  });
+
+  it("keeps question wording out of product terms for source questions", () => {
+    expect(understandQuery("Trang nào có thông tin về vít tole?").nameTerms).toEqual(["vít", "tole"]);
   });
 
   it("marks conflicting explicit price tiers for clarification", () => {
@@ -63,5 +71,10 @@ describe("Vietnamese query understanding", () => {
       .toBe("vít 10 ly?");
     expect(resolveFollowUpQuestion("Bulong 8 ly", "vít 10 ly?"))
       .toBe("vít 10 ly?");
+  });
+
+  it("carries product context into a short specification-only clarification reply", () => {
+    expect(resolveFollowUpQuestion("Bánh xe giá bao nhiêu?", "1T2"))
+      .toBe("Bánh xe 1T2");
   });
 });

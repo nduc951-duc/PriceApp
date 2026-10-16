@@ -96,7 +96,8 @@ function normalizedPattern(value: string): string {
 
 const STOP_WORDS = new Set([
   "bao", "gia", "cho", "minh", "toi", "hoi", "can", "mua", "lay", "loai", "nao",
-  "nhieu", "tien", "xin", "vui", "long", "voi", "la",
+  "nhieu", "tien", "xin", "vui", "long", "voi", "la", "trang", "co", "thong", "tin",
+  "ve", "san", "pham", "quy", "cach", "mat", "hang", "duoc", "tai", "o", "nay",
 ]);
 const UNIT_PATTERN = /\b(?:kg|g|met|m|cm|mm|lit|l|cai|con|tam|cay|bich|bo|cuon|hop|thung|goi)\b/gu;
 const QUANTITY_PATTERN = /\b(?:mua|lay|can|so\s+luong)\s+(\d+(?:[.,]\d+)?)(?:\s*(kg|g|met|m|cm|mm|lit|l|cai|con|tam|cay|bich|bo|cuon|hop|thung|bao|goi))?\b/gu;
@@ -104,7 +105,7 @@ const QUANTITY_PATTERN = /\b(?:mua|lay|can|so\s+luong)\s+(\d+(?:[.,]\d+)?)(?:\s*
 export function understandQuery(input: string, options: UnderstandQueryOptions = {}): QueryUnderstanding {
   const normalized = normalizeWithOffsets(input);
   const dimensionsFound = collectMatches(normalized, /\b\d+(?:[.,]\d+)?\s*(?:x\s*\d+(?:[.,]\d+)?|ly|li|mm|cm|met|m)\b/gu);
-  const codesFound = collectMatches(normalized, /\b(?:\d+[a-z]\d*|[a-z]\d+|\d{4,})\b/gu)
+  const codesFound = collectMatches(normalized, /\b(?:\d+[a-z]+\d*|[a-z]+\d+|\d{4,})\b/gu)
     .filter((code) => !dimensionsFound.some((dimension) => code.start < dimension.end && dimension.start < code.end));
   const materialFound = collectMatches(normalized, /\b(?:ma\s+kem|thep\s+khong\s+gi|inox|sat|thep|nhom|dong|nhua|cao\s+su)\b/gu);
 
@@ -168,10 +169,17 @@ export function understandQuery(input: string, options: UnderstandQueryOptions =
 
 /** Carry prior product words into a clear follow-up without carrying old specs, tiers, or quantities. */
 export function resolveFollowUpQuestion(previousQuestion: string | undefined, currentQuestion: string): string {
-  if (!previousQuestion || !/^\s*còn\b/i.test(currentQuestion)) return currentQuestion;
-  const followUpText = currentQuestion.replace(/^\s*còn\b\s*/i, "").replace(/^\s*(?:loại|quy\s+cách)\b\s*/i, "");
+  if (!previousQuestion) return currentQuestion;
+  const startsAsFollowUp = /^\s*còn\b/i.test(currentQuestion);
+  const followUpText = startsAsFollowUp
+    ? currentQuestion.replace(/^\s*còn\b\s*/i, "").replace(/^\s*(?:loại|quy\s+cách)\b\s*/i, "")
+    : currentQuestion;
   const current = understandQuery(followUpText);
-  if (current.nameTerms.length > 0 || current.aliases.length > 0) return followUpText;
+  const hasExplicitAttribute = current.dimensions.length > 0 || current.specCodes.length > 0 || current.material !== undefined
+    || current.package !== undefined || current.unit !== undefined || current.tier !== undefined || current.quantity !== undefined;
+  const attributeOnlyReply = current.nameTerms.length === 0 && current.aliases.length === 0 && hasExplicitAttribute;
+  if (!startsAsFollowUp && !attributeOnlyReply) return currentQuestion;
+  if (startsAsFollowUp && (current.nameTerms.length > 0 || current.aliases.length > 0)) return followUpText;
   const previous = understandQuery(previousQuestion);
   const productTerms = [...previous.aliases, ...previous.nameTerms];
   return productTerms.length > 0 ? `${productTerms.join(" ")} ${followUpText}`.trim() : followUpText;

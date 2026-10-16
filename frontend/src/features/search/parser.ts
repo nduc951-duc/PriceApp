@@ -20,20 +20,9 @@ export function rankMatch(query:string,target:string,aliasesList:string[]=[]){
 }
 export function matchesCatalogQuery(query:string,target:string){
   const normalizedQuery=parseQuery(query).normalized;
-  const words=normalizeVietnamese(target).split(/\s+/).filter(Boolean);
-  return normalizedQuery.split(/\s+/).filter(Boolean).every(term=>
-    words.some(word=>word.includes(term)||(!/\d/.test(term)&&term.length>=4&&editDistance(word,term)<=1))
+  const terms=normalizedQuery.match(/[a-z0-9]+(?:x[a-z0-9]+)*/g) ?? [];
+  const words=normalizeVietnamese(target).match(/[a-z0-9]+(?:x[a-z0-9]+)*/g) ?? [];
+  return terms.every(term=>
+    words.some(word=>word.includes(term))
   );
-}
-function editDistance(a:string,b:string){
-  const row=Array.from({length:b.length+1},(_,i)=>i);
-  for(let i=1;i<=a.length;i++){
-    let previous=row[0];row[0]=i;
-    for(let j=1;j<=b.length;j++){
-      const saved=row[j];
-      row[j]=Math.min(row[j]+1,row[j-1]+1,previous+(a[i-1]===b[j-1]?0:1));
-      previous=saved;
-    }
-  }
-  return row[b.length];
 }

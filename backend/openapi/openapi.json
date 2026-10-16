@@ -606,6 +606,22 @@
                           "displayName": {
                             "type": "string"
                           },
+                          "productCode": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "aliases": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "sourcePages": {
                             "type": "array",
                             "items": {
@@ -627,6 +643,8 @@
                           "category",
                           "spec",
                           "displayName",
+                          "productCode",
+                          "aliases",
                           "sourcePages",
                           "sourceFiles"
                         ]
@@ -1050,6 +1068,22 @@
                           "specification": {
                             "type": "string"
                           },
+                          "productCode": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "aliases": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "packaging": {
                             "type": "string"
                           },
@@ -1091,6 +1125,8 @@
                           "name",
                           "variant",
                           "specification",
+                          "productCode",
+                          "aliases",
                           "packaging",
                           "packageQuantity",
                           "unit",
@@ -4123,27 +4159,41 @@
                             "type": "string"
                           },
                           "sourceRevision": {
-                            "type": "integer",
-                            "exclusiveMinimum": 0,
-                            "maximum": 9007199254740991
-                          },
-                          "sourceSpan": {
-                            "type": "object",
-                            "properties": {
-                              "start": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 9007199254740991
-                              },
-                              "end": {
+                            "anyOf": [
+                              {
                                 "type": "integer",
                                 "exclusiveMinimum": 0,
                                 "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
                               }
-                            },
-                            "required": [
-                              "start",
-                              "end"
+                            ]
+                          },
+                          "sourceSpan": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "start": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "end": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "start",
+                                  "end"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
                             ]
                           },
                           "excerpt": {
@@ -4511,6 +4561,611 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "question"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/rag/query": {
+      "post": {
+        "operationId": "queryPublicKnowledgeBase",
+        "summary": "Khách tra cứu giá từ catalog công khai đã xác minh",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "answered",
+                        "clarify",
+                        "insufficient_evidence"
+                      ]
+                    },
+                    "clarification": {
+                      "type": "string"
+                    },
+                    "conversationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "feedbackMessageId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "answer": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "variant": {
+                            "type": "string"
+                          },
+                          "verificationStatus": {
+                            "type": "string",
+                            "enum": [
+                              "verified",
+                              "needs_review",
+                              "unreadable",
+                              "sample"
+                            ]
+                          },
+                          "sourcePages": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "prices": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "packagingId": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "priceType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "retail",
+                                    "wholesale",
+                                    "dealer"
+                                  ]
+                                },
+                                "minimumQuantity": {
+                                  "type": "number"
+                                },
+                                "packagingName": {
+                                  "type": "string"
+                                },
+                                "packageQuantity": {
+                                  "type": "number"
+                                },
+                                "unit": {
+                                  "type": "string"
+                                },
+                                "packageNote": {
+                                  "type": "string"
+                                },
+                                "priceList": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "supplier": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "verificationStatus": {
+                                  "type": "string",
+                                  "enum": [
+                                    "verified",
+                                    "needs_review",
+                                    "unreadable",
+                                    "sample"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "packagingId",
+                                "version",
+                                "amount",
+                                "priceType",
+                                "minimumQuantity",
+                                "packagingName",
+                                "packageQuantity",
+                                "unit",
+                                "packageNote",
+                                "priceList",
+                                "supplier",
+                                "verificationStatus"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "productName",
+                          "category",
+                          "variant",
+                          "verificationStatus",
+                          "sourcePages",
+                          "prices"
+                        ]
+                      }
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "pageNumber": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "chunkId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "chunkKey": {
+                            "type": "string"
+                          },
+                          "sourceRevision": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sourceSpan": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "start": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "end": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "start",
+                                  "end"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "excerpt": {
+                            "type": "string"
+                          },
+                          "evidenceKind": {
+                            "type": "string",
+                            "enum": [
+                              "approved_page_ocr",
+                              "verified_catalog"
+                            ]
+                          },
+                          "verifiedVariantId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "verifiedPriceId": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "pageNumber",
+                          "chunkId",
+                          "chunkKey",
+                          "sourceRevision",
+                          "sourceSpan",
+                          "excerpt",
+                          "evidenceKind"
+                        ]
+                      }
+                    },
+                    "retrieval": {
+                      "type": "object",
+                      "properties": {
+                        "vectorChunks": {
+                          "type": "number"
+                        },
+                        "lexicalProducts": {
+                          "type": "number"
+                        },
+                        "embeddingModel": {
+                          "type": "string"
+                        },
+                        "trace": {
+                          "type": "object",
+                          "properties": {
+                            "question": {
+                              "type": "string"
+                            },
+                            "chunkIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "variantIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "priceIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "answer": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "question",
+                            "chunkIds",
+                            "variantIds",
+                            "priceIds",
+                            "answer"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "vectorChunks",
+                        "lexicalProducts",
+                        "embeddingModel"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "answer",
+                    "items",
+                    "sources",
+                    "retrieval"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "previousQuestion": {
+                    "type": "string",
+                    "maxLength": 1000
                   }
                 },
                 "required": [

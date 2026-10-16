@@ -1,6 +1,6 @@
 export type CatalogEntry = {
   categoryId: number; productId: number; variantId: number; name: string; category: string;
-  spec: string; displayName: string; sourcePages: number[]; sourceFiles: string[];
+  spec: string; displayName: string; productCode: string | null; aliases: string[]; sourcePages: number[]; sourceFiles: string[];
 };
 
 export type CatalogPrice = {

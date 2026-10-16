@@ -21,8 +21,8 @@ export type RagCitation = {
   pageNumber: number;
   chunkId: number;
   chunkKey: string;
-  sourceRevision: number;
-  sourceSpan: CitationSourceSpan;
+  sourceRevision: number | null;
+  sourceSpan: CitationSourceSpan | null;
   excerpt: string;
   evidenceKind: CitationEvidenceKind;
   verifiedVariantId?: number;
@@ -41,13 +41,16 @@ const isValidSpan = (span: CitationSourceSpan | null | undefined): span is Citat
 export function buildCitations(evidence: readonly RetrievedChunkEvidence[]): RagCitation[] {
   const citations: RagCitation[] = [];
   for (const item of evidence) {
+    if (item.evidenceKind !== "approved_page_ocr" && item.evidenceKind !== "verified_catalog") continue;
+    const isOcrEvidence = item.evidenceKind === "approved_page_ocr";
+    const isCatalogEvidence = item.evidenceKind === "verified_catalog";
     if (!isPositiveId(item.pageNumber)
       || !isPositiveId(item.chunkId)
       || typeof item.chunkKey !== "string" || !item.chunkKey.trim()
-      || !isPositiveId(item.sourceRevision)
-      || !isValidSpan(item.sourceSpan)
       || typeof item.excerpt !== "string" || !item.excerpt.trim()
-      || (item.evidenceKind !== "approved_page_ocr" && item.evidenceKind !== "verified_catalog")
+      || (isOcrEvidence && (!isPositiveId(item.sourceRevision) || !isValidSpan(item.sourceSpan)))
+      || (isCatalogEvidence && item.sourceRevision !== null && item.sourceRevision !== undefined && !isPositiveId(item.sourceRevision))
+      || (isCatalogEvidence && item.sourceSpan !== null && item.sourceSpan !== undefined && !isValidSpan(item.sourceSpan))
       || (item.verifiedVariantId !== undefined && item.verifiedVariantId !== null && !isPositiveId(item.verifiedVariantId))
       || (item.verifiedPriceId !== undefined && item.verifiedPriceId !== null && !isPositiveId(item.verifiedPriceId))) {
       continue;
@@ -57,8 +60,8 @@ export function buildCitations(evidence: readonly RetrievedChunkEvidence[]): Rag
       pageNumber: item.pageNumber,
       chunkId: item.chunkId,
       chunkKey: item.chunkKey,
-      sourceRevision: item.sourceRevision,
-      sourceSpan: { start: item.sourceSpan.start, end: item.sourceSpan.end },
+      sourceRevision: isPositiveId(item.sourceRevision) ? item.sourceRevision : null,
+      sourceSpan: isValidSpan(item.sourceSpan) ? { start: item.sourceSpan.start, end: item.sourceSpan.end } : null,
       excerpt: item.excerpt,
       evidenceKind: item.evidenceKind,
     };

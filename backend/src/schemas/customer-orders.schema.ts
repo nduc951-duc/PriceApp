@@ -2,7 +2,8 @@ import { z } from "zod";
 
 export const publicCatalogResponseSchema = z.object({
   items: z.array(z.object({
-    category: z.string(), name: z.string(), variant: z.string(), specification: z.string(), packaging: z.string(),
+    category: z.string(), name: z.string(), variant: z.string(), specification: z.string(),
+    productCode: z.string().nullable(), aliases: z.array(z.string()), packaging: z.string(),
     packageQuantity: z.number().positive(), unit: z.string(), priceId: z.number().int().positive(), version: z.number().int().positive(),
     priceType: z.enum(["retail", "wholesale"]), minimumQuantity: z.number().positive(), price: z.number().nonnegative(),
   })), syncedAt: z.string(),

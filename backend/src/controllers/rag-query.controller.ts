@@ -30,3 +30,15 @@ export async function ragQuery(request: FastifyRequest) {
     throw error;
   }
 }
+
+export async function publicRagQuery(request: FastifyRequest) {
+  try {
+    const input = request.body as { question: string; previousQuestion?: string };
+    return await queryRag({ question: input.question }, request.server.publicSupabaseFactory(), { previousQuestion: input.previousQuestion }, { publicCatalogOnly: true });
+  } catch (error) {
+    if (error instanceof Error && /chưa được cấu hình/.test(error.message)) {
+      throw new ApiError(503, "RAG_UNAVAILABLE", "Dịch vụ RAG chưa được cấu hình.");
+    }
+    throw error;
+  }
+}

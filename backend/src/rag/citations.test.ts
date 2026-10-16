@@ -50,4 +50,14 @@ describe("buildCitations", () => {
       },
     ]);
   });
+
+  it("keeps verified catalog evidence when OCR revision offsets do not apply", () => {
+    expect(buildCitations([evidence({
+      chunkKey: "page:9:variant:21:0", sourceRevision: null, sourceSpan: null,
+      evidenceKind: "verified_catalog", verifiedVariantId: 21,
+    })])).toEqual([{
+      pageNumber: 4, chunkId: 11, chunkKey: "page:9:variant:21:0", sourceRevision: null,
+      sourceSpan: null, excerpt: "Price by approved package.", evidenceKind: "verified_catalog", verifiedVariantId: 21,
+    }]);
+  });
 });

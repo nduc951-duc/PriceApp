@@ -10,9 +10,9 @@ export async function allRagRows(query: (start: number, end: number) => PromiseL
   }
 }
 
-export function ragChunksRepository(client: SupabaseClient) {
+export function ragChunksRepository(client: SupabaseClient, publicCatalogOnly = false) {
   return {
-    match: (vector: string, model: string) => client.rpc("match_rag_chunks", { p_embedding: vector, p_embedding_model: model, p_match_count: 8 }),
+    match: (vector: string, model: string) => client.rpc(publicCatalogOnly ? "match_public_rag_chunks" : "match_rag_chunks", { p_embedding: vector, p_embedding_model: model, p_match_count: 8 }),
     count: () => client.from("rag_chunks").select("id", { count: "exact", head: true }),
     latestRun: () => client.from("rag_index_runs").select("id,status,checkpoint,total_chunks,changed,reused,removed,model,corpus_hash").order("id", { ascending: false }).limit(1).maybeSingle(),
     existing: (start: number, end: number) => client.from("rag_chunks").select("chunk_key,content_hash,embedding_model,embedding_fingerprint,embedding").order("id").range(start, end),

@@ -4,12 +4,14 @@ import { ArrowRight, Check, Plus, Search, ShoppingBag, Store } from "lucide-reac
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Alert, Button, Drawer, DrawerHeader, DrawerItems, Select, Spinner, TextInput } from "flowbite-react";
-import { CUSTOMER_ORDER_MAX_ITEMS, CUSTOMER_ORDER_MAX_QUANTITY, customerCartSubtotal, setCustomerCartQuantity, type CustomerCartLine, type PublicPrice } from "@/features/orders/customer-cart";
+import { addToCustomerCart, CUSTOMER_ORDER_MAX_ITEMS, CUSTOMER_ORDER_MAX_QUANTITY, customerCartSubtotal, setCustomerCartQuantity, type CustomerCartLine, type PublicPrice } from "@/features/orders/customer-cart";
 import { formatVnd } from "@/features/pricing/validation";
 import { ApiRequestError } from "@/lib/api/client";
 import { fetchPublicCustomerCatalog, submitPublicCustomerOrder } from "@/lib/api/customer-orders";
 import { CustomerCartPanel } from "@/components/customer-cart-panel";
 import { useModalFocus } from "@/hooks/use-modal-focus";
+import { PriceQuestionAssistant } from "@/components/price-question-assistant";
+import { matchesCatalogQuery } from "@/features/search/parser";
 
 type Receipt = Awaited<ReturnType<typeof submitPublicCustomerOrder>>;
 function groupKey(p: PublicPrice) { return [p.category, p.name, p.variant, p.specification, p.packaging, p.packageQuantity, p.unit].join("|"); }
@@ -61,6 +63,22 @@ export function CustomerStorefront() {
     catch { setCatalogError("Chưa tải được bảng giá"); }
     finally { setLoading(false); }
   }
+  function addRagPriceToCart(item: { productName: string; variant: string }, price: { id: number; version: number }) {
+    const publicPrice = prices.find((candidate) => candidate.priceId === price.id && candidate.version === price.version);
+    if (!publicPrice) {
+      setAnnouncement("Giá này đã thay đổi. Tải lại bảng giá rồi chọn mức hiện hành.");
+      void loadCatalog();
+      return;
+    }
+    if (cart.length >= CUSTOMER_ORDER_MAX_ITEMS && !cart.some((line) => line.priceId === publicPrice.priceId)) {
+      setAnnouncement(`Đơn tối đa ${CUSTOMER_ORDER_MAX_ITEMS} mặt hàng. Xóa một dòng rồi thử lại.`);
+      return;
+    }
+    setCart((current) => addToCustomerCart(current, publicPrice));
+    setAnnouncement(`Đã thêm ${item.productName} ${item.variant} vào đơn nháp`);
+    if (desktop) document.getElementById("shop-cart")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    else setCartOpen(true);
+  }
   useEffect(() => {
     let active = true;
     let savedCart: CustomerCartLine[] = [];
@@ -84,7 +102,10 @@ export function CustomerStorefront() {
       const key = groupKey(p), entry = grouped.get(key);
       if (entry) entry.prices.push(p); else grouped.set(key, { first: p, prices: [p] });
     }
-    return [...grouped.values()].filter(({ first }) => (category === "all" || first.category === category) && `${first.category} ${first.name} ${first.variant} ${first.specification} ${first.packaging}`.toLocaleLowerCase("vi").includes(query.trim().toLocaleLowerCase("vi")));
+    return [...grouped.values()].filter(({ first }) =>
+      (category === "all" || first.category === category) &&
+      (!query.trim() || matchesCatalogQuery(query, `${first.category} ${first.name} ${first.variant} ${first.specification} ${first.productCode ?? ""} ${(first.aliases ?? []).join(" ")} ${first.packaging}`))
+    );
   }, [prices, category, query, tier]);
   const { subtotal, stalePriceIds } = useMemo(() => customerCartSubtotal(cart, prices), [cart, prices]);
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
@@ -119,6 +140,7 @@ export function CustomerStorefront() {
       </div>
     </header>
     <div aria-live="polite" className="sr-only">{announcement}</div>
+    {!receipt && <PriceQuestionAssistant audience="customer" onChoosePrice={addRagPriceToCart}/>}
     {receipt ? <section className="mx-auto mt-10 max-w-lg rounded-lg border border-gray-200 bg-white p-6 md:p-8" aria-live="polite">
       <Check className="mb-4 text-green-700" size={28}/><h1 className="text-2xl font-semibold">Đã gửi yêu cầu</h1><p className="mt-3 text-gray-600">Cửa hàng sẽ gọi {contact.phone} để xác nhận mặt hàng và trao đổi cách giao.</p>
       <dl className="my-6 space-y-3 border-y border-gray-200 py-4"><div className="flex justify-between"><dt>Mã yêu cầu</dt><dd className="font-semibold">{receipt.reference}</dd></div><div className="flex justify-between"><dt>Tạm tính</dt><dd className="font-semibold tabular-nums">{formatVnd(receipt.subtotal)}</dd></div></dl>

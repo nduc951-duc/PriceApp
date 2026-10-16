@@ -5,6 +5,7 @@ import type { CustomerOrderSubmissionProof } from "../services/customer-order-si
 export type PublicPriceType = "retail" | "wholesale";
 export type PublicCatalogItem = {
   category: string; name: string; variant: string; specification: string; packaging: string;
+  productCode: string | null; aliases: string[];
   packageQuantity: number; unit: string; priceId: number; version: number;
   priceType: PublicPriceType; minimumQuantity: number; price: number;
 };
@@ -27,6 +28,7 @@ export type CustomerOrderRequest = {
 
 type PublicCatalogRow = {
   category: string; product_name: string; variant_name: string; specification: string;
+  product_code?: string | null; aliases?: string[] | null;
   packaging_name: string; package_quantity: string | number; unit: string; price_id: number;
   price_version: number; price_type: string; minimum_quantity: string | number; amount: string | number;
 };
@@ -37,6 +39,7 @@ export function mapPublicCatalogRows(rows: PublicCatalogRow[]): PublicCatalogIte
     const numbers = [Number(row.package_quantity), Number(row.minimum_quantity), Number(row.amount)];
     if (!numbers.every(Number.isFinite) || numbers[0] <= 0 || numbers[1] <= 0 || numbers[2] < 0 || !Number.isSafeInteger(row.price_id) || !Number.isSafeInteger(row.price_version)) return [];
     return [{ category: row.category, name: row.product_name, variant: row.variant_name, specification: row.specification,
+      productCode: row.product_code ?? null, aliases: row.aliases ?? [],
       packaging: row.packaging_name, packageQuantity: numbers[0], unit: row.unit, priceId: row.price_id,
       version: row.price_version, priceType: row.price_type, minimumQuantity: numbers[1], price: numbers[2] }];
   });

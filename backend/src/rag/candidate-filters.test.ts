@@ -1,21 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { matchesExplicitQuery } from "./candidate-filters.js";
+import { comparisonTargets, matchesExplicitQuery, matchesNamedCandidate } from "./candidate-filters.js";
 
-describe("explicit query filters for catalog candidates", () => {
-  it("rejects a nearby dimension and retains an exact one", () => {
-    const query = "vít 8 ly";
-    expect(matchesExplicitQuery({ productName: "Vít", variant: "10 ly", packages: [] }, query)).toBe(false);
-    expect(matchesExplicitQuery({ productName: "Vít", variant: "8 ly", packages: [] }, query)).toBe(true);
+describe("candidate filtering for specification codes", () => {
+  it("does not match a longer code when the question names a shorter code", () => {
+    const candidate = { productName: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T2", packages: [{ name: "1 bánh/cái", unit: "bánh", activeTiers: ["retail"] as const }] };
+    expect(matchesExplicitQuery(candidate, "Giá bánh xe Đỏ mận khóa ĐL 1T")).toBe(false);
   });
 
-  it("checks explicit package, unit, and active price tier together", () => {
-    const candidate = { productName: "Tắc kê", variant: "6x50", packages: [{ name: "bịch 10 cái", unit: "cái", activeTiers: ["wholesale"] }] };
-    expect(matchesExplicitQuery(candidate, "tắc kê 6x50 bịch 10 cái, giá sỉ")).toBe(true);
-    expect(matchesExplicitQuery(candidate, "tắc kê 6x50 hộp 10 cái, giá sỉ")).toBe(false);
-    expect(matchesExplicitQuery({ ...candidate, packages: [{ ...candidate.packages[0]!, activeTiers: ["retail"] }] }, "tắc kê 6x50 bịch 10 cái, giá sỉ")).toBe(false);
+  it("matches the exact named code", () => {
+    const candidate = { productName: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T", packages: [{ name: "1 bánh/cái", unit: "bánh", activeTiers: ["retail"] as const }] };
+    expect(matchesExplicitQuery(candidate, "Giá bánh xe Đỏ mận khóa ĐL 1T")).toBe(true);
   });
 
-  it("does not require attributes that the question did not specify", () => {
-    expect(matchesExplicitQuery({ productName: "Tắc kê", variant: "6x50", packages: [] }, "tắc kê")).toBe(true);
+  it("rejects an unrelated catalog candidate for an out-of-catalog product question", () => {
+    expect(matchesNamedCandidate({ productName: "Bánh xe", variant: "Đỏ mận ĐL 1T2", aliases: [] }, "Giá pizza Hawaii size L là bao nhiêu?", 0))
+      .toBe(false);
+  });
+
+  it("accepts a specific product despite one lightly misspelled term when lexical evidence is strong", () => {
+    expect(matchesNamedCandidate({ productName: "Tắc kê sắt", variant: "6x50", aliases: [] }, "Giá tắc kẹ sắt 6x50?", 45))
+      .toBe(true);
+  });
+
+  it("does not let a high lexical score replace an explicitly named variant attribute", () => {
+    expect(matchesNamedCandidate(
+      { productName: "Bánh xe", variant: "Đỏ mận ĐL 1T", aliases: [] },
+      "Giá bánh xe Đỏ mận khóa ĐL 1T?",
+      60,
+    )).toBe(false);
+  });
+
+  it("extracts the two explicit targets from a comparison question", () => {
+    expect(comparisonTargets("So sánh giá tắc kê sắt 6x50 với tắc kê sắt 8x50"))
+      .toEqual(["tắc kê sắt 6x50", "tắc kê sắt 8x50"]);
+    expect(comparisonTargets("So sánh bánh xe Đỏ mận ĐL 1T2 với 1T"))
+      .toEqual(["bánh xe Đỏ mận ĐL 1T2", "bánh xe Đỏ mận ĐL 1T"]);
+    expect(comparisonTargets("Giá tắc kê sắt 6x50 là bao nhiêu?"))
+      .toBeNull();
   });
 });

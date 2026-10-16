@@ -12,8 +12,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 let client: SupabaseClient;
 
 type Row = Record<string, unknown>;
-function harness(text: string) {
+function harness(text: string, initialVariants: Row[] = []) {
   let pageText = text;
+  let variants = initialVariants;
   let active = 0;
   let nextRun = 1;
   const rows: Row[] = [];
@@ -24,6 +25,7 @@ function harness(text: string) {
     query.order = () => query;
     query.range = async (start: number, end: number) => ({
       data: (table === "rag_page_texts" ? [{ source_page_id: 1, title: "Trang 1", extracted_text: pageText, revision: 1, source_pages: { page_number: 1, verification_status: "verified" } }]
+        : table === "product_variants" ? variants
         : table === "rag_chunks" ? rows : []).slice(start, end + 1), error: null,
     });
     return query;
@@ -66,7 +68,7 @@ function harness(text: string) {
       return { data: { ...run }, error: null };
     },
   };
-  return { client, rows, runs, setText: (value: string) => { pageText = value; }, getActive: () => active };
+  return { client, rows, runs, setText: (value: string) => { pageText = value; }, setVariants: (value: Row[]) => { variants = value; }, getActive: () => active };
 }
 
 describe("staged index", () => {
@@ -101,6 +103,29 @@ describe("staged index", () => {
     expect(state.rows[0]!.generation_id).toBe(state.getActive());
     expect(new Set(state.rows.map((row) => row.chunk_key)).size).toBe(1);
     expect(mocks.embed).toHaveBeenCalledTimes(1);
+  });
+
+  it("reindexes verified packaging and unit changes without retaining the old chunk", async () => {
+    const variant: Row = {
+      id: 4, display_name: "Tắc kê sắt 6x50", raw_specification: "6x50", search_text: "tắc kê 6x50", attributes: {},
+      products: { name: "Tắc kê sắt", categories: { name: "Tắc kê" }, product_aliases: [] },
+      variant_sources: [{ source_page_id: 2, source_pages: { page_number: 2, verification_status: "verified" } }],
+      packaging_options: [{ name: "Bịch", quantity: 10, base_unit: "cái", note: null }],
+    };
+    const state = harness("", [variant]);
+    client = state.client as unknown as SupabaseClient;
+
+    const first = await indexRag(client);
+    expect(first.status).toBe("completed");
+    expect(state.rows[0]!.content).toContain("Bịch · 10 cái");
+    state.setVariants([{ ...variant, packaging_options: [{ name: "Hộp", quantity: 20, base_unit: "bộ", note: null }] }]);
+    const changed = await indexRag(client);
+
+    expect(changed).toMatchObject({ status: "completed", indexed: 1, reused: 0 });
+    expect(state.rows).toHaveLength(1);
+    expect(state.rows[0]!.content).toContain("Hộp · 20 bộ");
+    expect(state.rows[0]!.content).not.toContain("Bịch · 10 cái");
+    expect(mocks.embed).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the old generation active after a failed later batch and resumes", async () => {

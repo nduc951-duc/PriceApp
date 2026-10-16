@@ -5,9 +5,9 @@ import type { CatalogEntry, CatalogPrice, CatalogResponse } from "../schemas/cat
 type PriceRow = { id: number; amount: number | string; version: number; price_type: string; minimum_quantity: number | string; active: boolean; valid_from: string; valid_to: string | null; price_lists: { suppliers: { name: string } | null } | null };
 type PackageRow = { id: number; name: string; quantity: number | string; base_unit: string; note: string | null; prices: PriceRow[] | null };
 type VariantRow = {
-  id: number; active: boolean; display_name: string; raw_specification: string | null;
+  id: number; active: boolean; sku: string | null; display_name: string; raw_specification: string | null;
   verification_status: CatalogPrice["status"] | "sample";
-  products: { id: number; name: string; categories: { id: number; name: string } | null } | null;
+  products: { id: number; name: string; categories: { id: number; name: string } | null; product_aliases: { alias: string }[] | null } | null;
   packaging_options: PackageRow[] | null;
   variant_sources: { source_pages: { page_number: number | null; storage_path: string | null } | null }[] | null;
 };
@@ -24,7 +24,8 @@ export function mapCatalogRows(rows: VariantRow[], now = Date.now()): Pick<Catal
     const category = variant.products?.categories?.name ?? "Chưa phân nhóm";
     const spec = variant.raw_specification ?? variant.display_name;
     const common = { categoryId: variant.products?.categories?.id ?? 0, productId: variant.products?.id ?? 0,
-      variantId: variant.id, name, category, sourcePages, sourceFiles };
+      variantId: variant.id, name, category, productCode: variant.sku ?? null,
+      aliases: variant.products?.product_aliases?.map(({ alias }) => alias) ?? [], sourcePages, sourceFiles };
     entries.push({ ...common, spec, displayName: variant.display_name });
     for (const pack of variant.packaging_options ?? []) {
       for (const price of pack.prices ?? []) {
@@ -49,8 +50,8 @@ export async function readCatalog(client: SupabaseClient): Promise<CatalogRespon
   const rows: VariantRow[] = [];
   for (let start = 0; ; start += pageSize) {
     const { data, error } = await client.from("product_variants").select(`
-      id, active, display_name, raw_specification, verification_status,
-      products!inner(id, name, categories!inner(id, name)),
+      id, active, sku, display_name, raw_specification, verification_status,
+      products!inner(id, name, categories!inner(id, name), product_aliases(alias)),
       variant_sources(source_pages(page_number, storage_path)),
       packaging_options(id, name, quantity, base_unit, note,
         prices(id, amount, version, price_type, minimum_quantity, active, valid_from, valid_to, price_lists(suppliers(name))))

@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { readCatalog, mapCatalogRows } from "./catalog.repository.js";
 
 const row = (overrides: Record<string, unknown> = {}) => ({
-  id: 7, active: true, display_name: "Variant", raw_specification: null, verification_status: "verified",
-  products: { id: 2, name: "Product", categories: { id: 3, name: "Category" } },
+  id: 7, active: true, sku: "SKU-7", display_name: "Variant", raw_specification: null, verification_status: "verified",
+  products: { id: 2, name: "Product", categories: { id: 3, name: "Category" }, product_aliases: [{ alias: "Product alias" }] },
   variant_sources: [{ source_pages: { page_number: 4, storage_path: "source-pages/four.jpg" } }, { source_pages: null }],
   packaging_options: [{ id: 8, name: "Box", quantity: "10", base_unit: "piece", note: null,
     prices: [{ id: 9, amount: "12345.50", version: 2, price_type: "retail", minimum_quantity: "1", active: true, valid_from: "2020-01-01T00:00:00.000Z", valid_to: null, price_lists: { suppliers: { name: "Vendor" } } },
@@ -29,6 +29,10 @@ describe("catalog mapping", () => {
     expect(mapped.entries).toHaveLength(1);
     expect(mapped.prices.map(price => price.id)).toEqual([9]);
     expect(mapped.entries[0].sourceFiles).toEqual(["source-pages/four.jpg"]);
+  });
+  it("returns the catalog SKU and aliases for direct staff search", () => {
+    const mapped = mapCatalogRows([row()]);
+    expect(mapped.entries[0]).toMatchObject({ productCode: "SKU-7", aliases: ["Product alias"] });
   });
   it("omits prices that have not started or have expired", () => {
     const packaging = row().packaging_options[0];
