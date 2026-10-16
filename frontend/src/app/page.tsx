@@ -1,6 +1,5 @@
-import { PriceApp } from "@/components/price-app";
-import { AuthGate } from "@/components/auth-gate";
+import { AppModeGate } from "@/components/app-mode-gate";
 
 export default function Home() {
-  return <AuthGate><PriceApp /></AuthGate>;
+  return <AppModeGate />;
 }

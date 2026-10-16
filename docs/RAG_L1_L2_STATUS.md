@@ -5,7 +5,7 @@
 - Thêm migration revision cho bản chép; chunk OCR ghi `source_revision`. RLS và RPC chỉ trả chunk OCR còn `approved` đúng revision; chunk catalog cần biến thể còn `active`, `verified` và còn liên kết trang nguồn. Trạng thái `rejected` hoặc trang `unreadable` ẩn toàn bộ chunk gắn trang đó. Đường tìm lexical cũng lọc biến thể theo RPC `current_rag_variant_sources` để không trả giá từ nguồn đã thu hồi.
 - Index xử lý cả tập nguồn rỗng; generation mới chỉ được publish khi đủ chunk, rồi dọn generation cũ. Lần index trả số chunk thêm/giữ/xóa, hash nội dung và model. Sửa giá SQL không nằm trong hash nội dung.
 - API `/api/rag/health` kiểm tra Supabase, embedding 1.024 chiều, chat model và mã fingerprint cấu hình. Trang `/rag-admin` hiển thị ba kết quả riêng.
-- API RAG trả `Cache-Control: private, no-store`; service worker v5 chỉ cache tài nguyên tĩnh và xóa cache ứng dụng đời trước. Vai trò được kiểm tra theo token ở từng request.
+- API RAG trả `Cache-Control: private, no-store`; service worker v6 cache HTML shell chung của `/` cùng các asset build tĩnh để tải lại POS khi mất mạng, không cache API hay response theo phiên. Đăng xuất xóa cache và snapshot; vai trò được kiểm tra theo token ở từng request.
 - Query trả dấu vết câu hỏi → chunk IDs → variant IDs → price IDs → câu trả lời; mặt hàng không có giá hiện hành nhận câu trả lời cố định “chưa có giá”.
 - Có 20 [câu hỏi ứng viên](RAG_L1_CASES.md) cho tập L1 và kiểm thử tự động cho vai trò, index rỗng, cache, giá động và không có giá.
 
@@ -28,3 +28,7 @@
 2. Đăng nhập owner, đối chiếu ảnh và duyệt 1–2 trang; không tự gán `verified` cho biến thể chưa kiểm tra.
 3. Chạy health check và index; lưu số chunk, revision/hash/model. Hỏi ít nhất một câu xuyên suốt pipeline rồi chạy bộ 20 câu.
 4. Bỏ duyệt trang đã thử và xác nhận chunk OCR biến mất ngay; đổi phiên owner → viewer/anon, kiểm tra API và cache. Sửa một giá bằng RPC audited có `expected_version`, hỏi lại và xác nhận vector/hash không đổi.
+
+## Cập nhật sau khi đồng bộ Supabase
+
+Các mục “chưa áp migration” ở trên là ghi chú lịch sử ngày 04/10. Tại lần rà soát 10/10, migration `202610130001_harden_price_rpc_guards.sql` và `202610130002_reject_nonfinite_price_values.sql` đã hiện diện trong remote history. Regression SQL xác nhận profileless caller bị từ chối, update/undo/batch từ chối version thiếu, update/batch từ chối `NaN`/vô cực, và catalog từ chối số lượng/giá không hữu hạn; toàn bộ script chạy trong transaction rollback. Chưa có corpus được duyệt hoặc phiên owner/viewer thật để nghiệm thu indexing và độ đúng câu trả lời.

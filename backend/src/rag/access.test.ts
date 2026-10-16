@@ -10,10 +10,20 @@ import { indexRag } from "../services/rag-index.service.js";
 describe("migrated source review and cleanup", () => {
   it("returns approved and draft source text with its current revision", async () => {
     const rows = [
-      { source_page_id: 1, title: "Trang 1", extracted_text: "đã duyệt", review_status: "approved", revision: 2, source_pages: { page_number: 1 } },
-      { source_page_id: 2, title: "Trang 2", extracted_text: "bản nháp riêng", review_status: "draft", revision: 4, source_pages: { page_number: 2 } },
+      { source_page_id: 1, title: "Trang 1", extracted_text: "đã duyệt", review_status: "approved", revision: 2, chunk_settings: { maxCharacters: 1100, overlapCharacters: 160 }, chunk_links: {}, source_pages: { page_number: 1, storage_path: "page-01.jpg", verification_status: "verified" } },
+      { source_page_id: 2, title: "Trang 2", extracted_text: "bản nháp riêng", review_status: "draft", revision: 4, chunk_settings: { maxCharacters: 1100, overlapCharacters: 160 }, chunk_links: {}, source_pages: { page_number: 2, storage_path: "page-02.jpg", verification_status: "needs_review" } },
     ];
-    const client = { from: () => ({ select: () => ({ order: async () => ({ data: rows, error: null }) }) }) } as unknown as SupabaseClient;
+    const client = { from: (table: string) => ({ select: () => {
+      const result = table === "rag_page_texts" ? { data: rows, error: null }
+        : table === "rag_index_state" ? { data: { active_generation: 0 }, error: null }
+          : table === "rag_index_runs" ? { data: null, error: null } : { data: [], error: null };
+      const query: Record<string, unknown> = {
+        order: () => query, eq: () => query, in: () => query, limit: () => query,
+        single: async () => result, maybeSingle: async () => result, range: async () => result,
+        then: (resolve: (value: typeof result) => unknown, reject: (cause: unknown) => unknown) => Promise.resolve(result).then(resolve, reject),
+      };
+      return query;
+    } }) } as unknown as SupabaseClient;
     const body = await listRagPages(client);
     expect(body.pages).toHaveLength(2);
     expect(body.pages[1]).toMatchObject({ sourcePageId: 2, pageNumber: 2, reviewStatus: "draft", revision: 4, extractedText: "bản nháp riêng" });
@@ -39,7 +49,7 @@ describe("migrated source review and cleanup", () => {
     };
     const from = vi.fn((table: string) => ({ select: () => chain(table === "rag_chunks" ? [{ chunk_key: "old" }] : []) }));
     const rpc = vi.fn(async (name: string) => ({ data: name === "rag_start_index_run"
-      ? { id: 4, corpus_hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", fingerprint: "lines-1100-overlap160-v2:ollama:bge-m3:digest:1024", checkpoint: 0, total_chunks: 0, changed: 0, reused: 0 }
+      ? { id: 4, corpus_hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", fingerprint: "records-1100-overlap160-v3:ollama:bge-m3:digest:1024", checkpoint: 0, total_chunks: 0, changed: 0, reused: 0 }
       : { id: 4, changed: 0, reused: 0, removed: 1 }, error: null }));
     const body = await indexRag({ from, rpc } as unknown as SupabaseClient);
     expect(body).toMatchObject({ status: "completed", indexed: 0, removed: 1, chunks: 0 });

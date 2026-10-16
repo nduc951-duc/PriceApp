@@ -12,6 +12,7 @@ import { registerRagRoutes } from "./routes/v1/rag.routes.js";
 import { registerCatalogRoutes } from "./routes/v1/catalog.routes.js";
 import { registerSourceFilesRoutes } from "./routes/v1/source-files.routes.js";
 import { registerPricesRoutes } from "./routes/v1/prices.routes.js";
+import { registerCustomerOrderRoutes } from "./routes/v1/customer-orders.routes.js";
 
 export function buildApp(options: { env: AppEnv; supabaseFactory: SupabaseFactory; logStream?: Writable }): FastifyInstance {
   const app = Fastify({
@@ -38,6 +39,8 @@ export function buildApp(options: { env: AppEnv; supabaseFactory: SupabaseFactor
     if (request.method === "OPTIONS") reply.code(204).send();
   });
   app.decorate("authenticate", createAuthenticate(options.env, options.supabaseFactory));
+  app.decorate("publicSupabaseFactory", options.supabaseFactory);
+  app.decorate("customerOrderHmacSecret", options.env.customerOrderHmacSecret);
   app.decorate("requireRole", requireRole);
   registerHealthRoutes(app);
   registerAuthRoutes(app);
@@ -45,5 +48,6 @@ export function buildApp(options: { env: AppEnv; supabaseFactory: SupabaseFactor
   registerCatalogRoutes(app);
   registerSourceFilesRoutes(app);
   registerPricesRoutes(app);
+  registerCustomerOrderRoutes(app);
   return app;
 }

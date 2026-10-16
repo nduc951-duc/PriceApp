@@ -20,6 +20,7 @@ const catalog = {
 
 async function loginOwner(page: Page) {
   await page.goto("/");
+  await page.getByRole("button", { name: "Nhân viên" }).click();
   await page.locator("#email").fill(ownerEmail);
   await page.locator("#password").fill(ownerPassword);
   await page.getByRole("button", { name: "ĐĂNG NHẬP" }).click();
@@ -79,7 +80,7 @@ test.describe("isolated PriceApp integration", () => {
     const dialog = page.getByRole("dialog", { name: "Test Bolt" });
     const priceButton = dialog.getByRole("button", { name: "Sửa giá Test Bolt" });
     await priceButton.click();
-    const input = dialog.locator("input.mt-3");
+    const input = dialog.getByRole("textbox", { name: "Giá mới của Test Bolt bằng VND" });
     await input.fill("9999");
     await input.press("Enter");
     await expect(page.locator(".pos-main > p[role=alert]")).toBeVisible();
@@ -103,7 +104,7 @@ test.describe("isolated PriceApp integration", () => {
     const dialog = page.getByRole("dialog", { name: "Test Bolt" });
     const priceButton = dialog.getByRole("button", { name: "Sửa giá Test Bolt" });
     await priceButton.click();
-    const input = dialog.locator("input.mt-3");
+    const input = dialog.getByRole("textbox", { name: "Giá mới của Test Bolt bằng VND" });
     await input.fill("9999");
     await input.press("Enter");
     await expect(page.locator(".pos-main > p[role=alert]")).toBeVisible();

@@ -58,7 +58,7 @@ describe("owner chunk preview", () => {
       const body = response.json();
       expect(body.source).toBe(source);
       expect(body.chunks).toHaveLength(2);
-      expect(body.chunks[0]).toEqual({ index: 0, content: `${first} ${second}`, start: 0, end: 801 });
+      expect(body.chunks[0]).toEqual({ index: 0, content: `${first} ${second}`, start: 0, end: 801, heading: null });
       for (const chunk of body.chunks) expect(source.slice(chunk.start, chunk.end)).toBe(chunk.content);
       expect(writes).not.toHaveBeenCalled();
     } finally { await app.close(); }
@@ -74,12 +74,12 @@ describe("owner chunk preview", () => {
     } finally { await app.close(); }
   });
 
-  it.each(["editor", "viewer"])("denies %s preview access before doing any work", async role => {
+  it.each(["editor", "viewer"])("allows %s to preview OCR chunks without data access", async role => {
     const { app, writes } = fixture(role);
     try {
       const response = await app.inject({ method: "POST", url: "/api/v1/admin/rag/preview", headers: { authorization: authorization() }, payload: { extractedText: "private OCR" } });
-      expect(response.statusCode).toBe(403);
-      expect(response.json()).toMatchObject({ error: { code: "FORBIDDEN" } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().chunks).toHaveLength(1);
       expect(writes).not.toHaveBeenCalled();
     } finally { await app.close(); }
   });

@@ -1,15 +1,18 @@
 @import "tailwindcss";
+@source "../../../.flowbite-react/class-list.json";
+@import "flowbite-react/plugin/tailwindcss";
+@source "../../.flowbite-react/class-list.json";
 
-:root { --ink:#0f172a; --muted:#526075; --paper:#f7f8ff; --card:#ffffff; --green:#087438; --lime:#bbf37c; --line:#dce3ec; }
+:root { --ink:#111827; --muted:#4b5563; --paper:#f9fafb; --card:#ffffff; --green:#1d4ed8; --lime:#dbeafe; --line:#e5e7eb; }
 * { box-sizing:border-box; }
-body { margin:0; background:var(--paper); color:var(--ink); font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-kerning:normal; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+body { margin:0; background:var(--paper); color:var(--ink); font-family:"Segoe UI", Roboto, Arial, sans-serif; font-kerning:normal; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
 button,input { font:inherit; }
 .money { font-variant-numeric:tabular-nums; }
 .scrollbar-none::-webkit-scrollbar { display:none; }
 button { cursor:pointer; }
 button:disabled { cursor:not-allowed; }
-:focus-visible { outline:3px solid #79db8d; outline-offset:2px; }
-.auth-page { background:linear-gradient(145deg,#f7f8ff,#e9f6ec); }
+:focus-visible { outline:3px solid #2563eb; outline-offset:2px; }
+.auth-page { background:var(--paper); }
 .app-header { position:sticky; top:0; z-index:30; }
 .app-search { box-shadow:0 3px 8px rgba(15,23,42,.08) !important; border-color:var(--line) !important; }
 .app-main { padding-bottom:100px; }
@@ -17,7 +20,7 @@ button:disabled { cursor:not-allowed; }
 .mobile-nav { position:fixed; bottom:0; left:0; right:0; z-index:35; display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line); background:#fff; padding:8px 8px max(8px,env(safe-area-inset-bottom)); box-shadow:0 -4px 18px rgba(15,23,42,.06); }
 .mobile-nav a,.mobile-nav button { min-height:52px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; border:0; background:transparent; color:var(--ink); font-size:11px; font-weight:700; }
 .mobile-nav .active { color:var(--green); }
-@media (min-width:641px) { .mobile-nav { display:none; } }
+@media (min-width:768px) { .mobile-nav { display:none; } }
 @media (max-width:640px) {
   .invoice-lines { overflow:visible; border:0; background:transparent; }
   .invoice-lines table,.invoice-lines tbody,.invoice-lines tr,.invoice-lines td { display:block; width:100%; min-width:0; }
@@ -30,88 +33,89 @@ button:disabled { cursor:not-allowed; }
   .invoice-lines td:last-child { position:absolute; top:9px; right:6px; width:auto; padding:8px; }
 }
 
-/* POS workstation layout based on the supplied reference. */
-:root { --ink:#1c1c17; --muted:#59635d; --paper:#fcf9f0; --card:#ffffff; --green:#174f36; --lime:#dbed69; --line:#c9d0c9; }
-body { background:var(--paper); color:var(--ink); font-family:"Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-kerning:normal; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
-h1,h2,h3,.pos-brand-copy b { font-family:"Space Grotesk", "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif; }
-.money,.pos-price-amount,.pos-invoice-total strong,.pos-header-count,.pos-shift-meta { font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric:tabular-nums; }
-.pos-header { position:sticky; top:0; z-index:40; width:100%; background:#f6f3ea; border-bottom:1px solid var(--line); box-shadow:0 1px 8px rgba(28,28,23,.06); }
+/* Employee workstation layout: design.md / KiotViet workflow / Flowbite controls. */
+body { background:var(--paper); color:var(--ink); font-family:"Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:15px; line-height:1.5; font-kerning:normal; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+h1,h2,h3,.pos-brand-copy b { font-family:"Segoe UI", ui-sans-serif, system-ui, sans-serif; }
+.money,.pos-price-amount,.pos-invoice-total strong,.pos-header-count,.pos-shift-meta { font-family:"Consolas", ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric:tabular-nums; }
+.pos-header { position:sticky; top:0; z-index:40; width:100%; background:#ffffff; border-bottom:1px solid var(--line); box-shadow:0 1px 8px rgba(28,28,23,.06); }
 .pos-header-inner { min-height:80px; max-width:1840px; margin:0 auto; padding:12px 24px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
 .pos-brand { display:flex; align-items:center; gap:11px; min-width:250px; color:var(--green); text-decoration:none; }
-.pos-brand-mark { display:grid; place-items:center; width:42px; height:42px; border-radius:8px; background:var(--green); color:var(--lime); font:700 25px/1 "Space Grotesk",sans-serif; }
+.pos-brand-mark { display:grid; place-items:center; width:42px; height:42px; border-radius:8px; background:var(--green); color:var(--lime); font:700 25px/1 "Segoe UI",sans-serif; }
 .pos-brand-copy { display:flex; flex-direction:column; gap:3px; }
 .pos-brand-copy b { font-size:20px; line-height:1; }
-.pos-brand-copy small { color:var(--muted); font:700 9px/1.3 "JetBrains Mono",monospace; letter-spacing:.08em; }
-.pos-top-nav { display:flex; align-items:center; gap:4px; padding:4px; border-radius:10px; background:#ebe8df; }
-.pos-nav-item,.pos-nav-active { border:0; border-radius:8px; padding:10px 13px; background:transparent; color:#59635d; font-size:13px; font-weight:600; text-decoration:none; white-space:nowrap; }
-.pos-nav-item:hover { background:#e0ddd4; color:var(--ink); }
-.pos-nav-active { background:#174f36; color:#fff; box-shadow:0 1px 4px rgba(23,79,54,.15); }
+.pos-brand-copy small { color:var(--muted); font:700 9px/1.3 "Consolas",monospace; letter-spacing:.08em; }
+.pos-top-nav { display:flex; align-items:center; gap:4px; padding:4px; border-radius:10px; background:#f3f4f6; }
+.pos-nav-item,.pos-nav-active { border:0; border-radius:8px; padding:10px 13px; background:transparent; color:#4b5563; font-size:13px; font-weight:600; text-decoration:none; white-space:nowrap; }
+.pos-nav-item:hover { background:#e5e7eb; color:var(--ink); }
+.pos-nav-active { background:#1d4ed8; color:#fff; box-shadow:0 1px 4px rgba(23,79,54,.15); }
 .pos-header-actions { display:flex; align-items:center; gap:9px; }
-.pos-live-badge,.pos-header-count { display:flex; align-items:center; gap:7px; padding:8px 10px; border-radius:6px; background:#ebe8df; color:var(--green); font:700 10px/1 "JetBrains Mono",monospace; white-space:nowrap; }
-.pos-header-count { color:#404943; font-size:11px; }
+.pos-live-badge,.pos-header-count { display:flex; align-items:center; gap:7px; padding:8px 10px; border-radius:6px; background:#f3f4f6; color:var(--green); font:700 10px/1 "Consolas",monospace; white-space:nowrap; }
+.pos-header-count { color:#374151; font-size:11px; }
 .pos-live-dot,.pos-live-offline,.pos-shift-pulse { width:8px; height:8px; border-radius:50%; background:#5e8b25; }
 .pos-live-offline { background:#bd8425; }
 .pos-invoice-button { display:flex; align-items:center; gap:8px; border:0; border-radius:8px; padding:10px 12px; background:var(--green); color:#fff; font-weight:700; white-space:nowrap; }
 .pos-invoice-button b { display:grid; place-items:center; min-width:21px; height:21px; border-radius:12px; background:var(--lime); color:var(--ink); font-size:11px; }
+.pos-logout-button { min-height:40px; border:1px solid var(--line); border-radius:8px; padding:8px 12px; background:#fff; color:var(--muted); font-size:12px; font-weight:700; white-space:nowrap; }
+.pos-logout-button:hover { border-color:#aab6ab; color:var(--ink); }
 .pos-main { width:100%; max-width:1840px; margin:0 auto; padding:14px 24px 80px; }
-.pos-shift-bar { display:flex; align-items:center; justify-content:space-between; gap:14px; min-height:43px; margin-bottom:14px; padding:7px 12px; background:#e5e2da; border:1px solid #ddd9d0; border-radius:8px; }
-.pos-shift-title,.pos-shift-meta { display:flex; align-items:center; gap:9px; color:#404943; font:700 11px/1.4 "JetBrains Mono",monospace; }
-.pos-shift-note { margin-left:8px; color:var(--muted); font:400 12px/1.4 "Hanken Grotesk",sans-serif; }
+.pos-shift-bar { display:flex; align-items:center; justify-content:space-between; gap:14px; min-height:43px; margin-bottom:14px; padding:7px 12px; background:#e5e7eb; border:1px solid #e5e7eb; border-radius:8px; }
+.pos-shift-title,.pos-shift-meta { display:flex; align-items:center; gap:9px; color:#374151; font:700 11px/1.4 "Consolas",monospace; }
+.pos-shift-note { margin-left:8px; color:var(--muted); font:400 12px/1.4 "Segoe UI",sans-serif; }
 .pos-shift-meta { font-size:10px; font-weight:500; }
 .pos-meta-separator { color:#91a095; }
 .pos-workspace { display:grid; grid-template-columns:minmax(300px,.98fr) minmax(380px,1.24fr) minmax(290px,.82fr); align-items:start; gap:16px; }
 .pos-column { min-width:0; display:flex; flex-direction:column; gap:14px; }
-.pos-panel { min-width:0; border:1px solid #e5e2da; border-radius:12px; background:#fff; padding:17px; box-shadow:0 2px 8px rgba(28,28,23,.045); }
+.pos-panel { min-width:0; border:1px solid #e5e7eb; border-radius:8px; background:#fff; padding:17px; }
 .pos-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
 .pos-panel-heading h1,.pos-panel-heading h2 { margin:2px 0 0; color:var(--green); font-size:20px; line-height:1.2; font-weight:700; }
-.pos-eyebrow,.pos-category-label { display:block; color:#69746d; font:700 9px/1.4 "JetBrains Mono",monospace; letter-spacing:.09em; text-transform:uppercase; }
+.pos-eyebrow,.pos-category-label { display:block; color:#69746d; font:700 9px/1.4 "Consolas",monospace; letter-spacing:.09em; text-transform:uppercase; }
 .pos-search-panel { padding:18px; }
 .pos-search-field { display:flex; align-items:center; gap:9px; min-height:52px; border:2px solid var(--green); border-radius:9px; padding:0 11px; color:var(--green); background:#fff; }
 .pos-search-field:focus-within { box-shadow:0 0 0 3px rgba(23,79,54,.12); }
 .pos-search-field input { min-width:0; flex:1; height:48px; border:0; outline:0; color:var(--ink); font-size:15px; background:transparent; }
-.pos-search-field kbd,.pos-open-invoice kbd { padding:4px 6px; border:1px solid #d7d8d1; border-radius:4px; color:#59635d; background:#f6f3ea; font:600 10px "JetBrains Mono",monospace; }
+.pos-search-field kbd,.pos-open-invoice kbd { padding:4px 6px; border:1px solid #d7d8d1; border-radius:4px; color:#4b5563; background:#ffffff; font:600 10px "Consolas",monospace; }
 .pos-quick-search { display:flex; gap:6px; overflow:auto; margin-top:11px; }
-.pos-quick-search button { flex-shrink:0; border:1px solid #e5e2da; border-radius:6px; padding:6px 9px; background:#fcf9f0; color:#404943; font-size:11px; }
+.pos-quick-search button { flex-shrink:0; border:1px solid #e5e7eb; border-radius:6px; padding:6px 9px; background:#fcf9f0; color:#374151; font-size:11px; }
 .pos-results-panel { padding:15px; }
 .pos-results-panel .pos-panel-heading { margin-bottom:10px; }
-.pos-result-count { display:grid; place-items:center; min-width:28px; height:28px; border-radius:7px; background:#e9eee8; color:var(--green); font:700 12px "JetBrains Mono",monospace; }
+.pos-result-count { display:grid; place-items:center; min-width:28px; height:28px; border-radius:7px; background:#eff6ff; color:var(--green); font:700 12px "Consolas",monospace; }
 .pos-product-list { display:flex; max-height:calc(100vh - 280px); min-height:340px; flex-direction:column; gap:8px; overflow:auto; padding-right:3px; }
 .pos-product-card { border:1px solid #e7e6df; border-radius:8px; padding:10px; background:#fff; }
 .pos-product-card:hover { border-color:#b6c8ba; }
 .pos-product-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
 .pos-product-heading h3 { margin:2px 0 0; color:#202923; font-size:14px; line-height:1.25; font-weight:700; }
 .pos-category-label { font-size:8px; }
-.pos-product-price { flex-shrink:0; color:var(--green); font:600 10px/1.4 "JetBrains Mono",monospace; text-align:right; }
+.pos-product-price { flex-shrink:0; color:var(--green); font:600 10px/1.4 "Consolas",monospace; text-align:right; }
 .pos-variant-list { display:flex; flex-wrap:wrap; gap:5px; margin-top:9px; }
 .pos-variant-chip { display:inline-flex; align-items:center; gap:6px; border:1px solid #dadfd9; border-radius:6px; padding:5px 7px; background:#f7f6f1; color:var(--ink); font-size:11px; }
-.pos-variant-chip small { color:#768078; font:500 8px "JetBrains Mono",monospace; }
+.pos-variant-chip small { color:#768078; font:500 8px "Consolas",monospace; }
 .pos-variant-chip:hover,.pos-variant-selected { border-color:var(--green); background:#e8f0e9; color:var(--green); }
 .pos-wholesale-hint { margin:7px 0 0; color:#84651c; font-size:10px; }
 .pos-empty-small { display:flex; align-items:center; justify-content:center; gap:8px; min-height:130px; color:var(--muted); font-size:13px; }
-.pos-spec-banner { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 12px; border-radius:8px; background:#f1eee5; }
+.pos-spec-banner { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 12px; border-radius:8px; background:#f3f4f6; }
 .pos-spec-banner>div { display:flex; flex-direction:column; gap:3px; }
-.pos-spec-banner>div b { color:var(--green); font:700 21px "Space Grotesk",sans-serif; }
+.pos-spec-banner>div b { color:var(--green); font:700 21px "Segoe UI",sans-serif; }
 .pos-spec-banner>button,.pos-source-row button,.pos-detail-bottom button { display:inline-flex; align-items:center; gap:5px; border:0; border-radius:6px; padding:7px 9px; background:#dfeadf; color:var(--green); font-size:11px; font-weight:700; white-space:nowrap; }
 .pos-source-row { display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin:10px 0; color:#66716a; font-size:10px; }
 .pos-price-list { display:flex; max-height:calc(100vh - 400px); min-height:240px; flex-direction:column; gap:9px; overflow-y:auto; padding:1px 3px 1px 0; }
-.pos-price-card { border:1px solid #e5e2da; border-radius:9px; padding:12px; background:#fcfbf7; }
+.pos-price-card { border:1px solid #e5e7eb; border-radius:9px; padding:12px; background:#fcfbf7; }
 .pos-price-card-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .pos-price-card-top>div { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
 .pos-price-card-top>div>b { font-size:12px; }
-.pos-tier-badge,.pos-verification { border-radius:4px; padding:4px 6px; background:#e9eee8; color:#364c3e; font:700 8px "JetBrains Mono",monospace; text-transform:uppercase; }
-.pos-tier-wholesale { background:#dbed69; color:#424b00; }
+.pos-tier-badge,.pos-verification { border-radius:4px; padding:4px 6px; background:#eff6ff; color:#364c3e; font:700 8px "Consolas",monospace; text-transform:uppercase; }
+.pos-tier-wholesale { background:#dbeafe; color:#1e40af; }
 .pos-verification { background:#f5edd5; color:#765c17; }
 .pos-verified { background:#dff0e3; color:#245c37; }
 .pos-min-quantity { margin:6px 0 0; color:#747c75; font-size:10px; }
 .pos-price-amount { margin:3px 0 10px; color:var(--green); font-size:27px; font-weight:700; letter-spacing:-.04em; }
 .pos-quantity-control { display:flex; align-items:center; gap:6px; }
-.pos-quantity-control button { display:grid; place-items:center; width:36px; height:36px; border:0; border-radius:6px; background:#e9eee8; color:var(--green); font-size:20px; font-weight:700; }
-.pos-quantity-control input { width:66px; height:36px; border:1px solid #c9d0c9; border-radius:6px; background:#fff; text-align:center; font:700 15px "JetBrains Mono",monospace; }
-.pos-quantity-control span { margin-left:auto; color:#59635d; font:500 10px "JetBrains Mono",monospace; }
+.pos-quantity-control button { display:grid; place-items:center; width:36px; height:36px; border:0; border-radius:6px; background:#eff6ff; color:var(--green); font-size:20px; font-weight:700; }
+.pos-quantity-control input { width:66px; height:36px; border:1px solid #c9d0c9; border-radius:6px; background:#fff; text-align:center; font:700 15px "Consolas",monospace; }
+.pos-quantity-control span { margin-left:auto; color:#4b5563; font:500 10px "Consolas",monospace; }
 .pos-price-warning { margin:8px 0 0; border-radius:5px; padding:6px; background:#fff4d8; color:#775b12; font-size:10px; }
-.pos-price-card-footer { display:flex; align-items:center; justify-content:space-between; gap:7px; margin-top:10px; border-top:1px solid #e5e2da; padding-top:9px; }
+.pos-price-card-footer { display:flex; align-items:center; justify-content:space-between; gap:7px; margin-top:10px; border-top:1px solid #e5e7eb; padding-top:9px; }
 .pos-price-card-footer>span { display:flex; flex-direction:column; gap:2px; color:#747c75; font-size:9px; }
-.pos-price-card-footer>span b { color:var(--ink); font:700 16px "JetBrains Mono",monospace; }
+.pos-price-card-footer>span b { color:var(--ink); font:700 16px "Consolas",monospace; }
 .pos-price-card-footer>button { display:flex; align-items:center; justify-content:center; gap:5px; min-height:36px; border:0; border-radius:6px; padding:7px 9px; background:var(--green); color:#fff; font-size:10px; font-weight:700; }
 .pos-price-card-footer>button:disabled { background:#aeb5ae; }
 .pos-close-detail,.pos-icon-action { display:grid; place-items:center; width:34px; height:34px; border:1px solid #e3e3dc; border-radius:7px; background:#fff; color:var(--green); }
@@ -123,35 +127,35 @@ h1,h2,h3,.pos-brand-copy b { font-family:"Space Grotesk", "Hanken Grotesk", ui-s
 .pos-no-prices>span,.pos-selection-empty>p { max-width:280px; color:var(--muted); font-size:12px; line-height:1.6; }
 .pos-no-prices>button,.pos-ask-link { display:inline-flex; align-items:center; gap:7px; border:0; border-radius:7px; padding:9px 12px; background:var(--green); color:#fff; font-size:11px; font-weight:700; text-decoration:none; }
 .pos-selection-empty { position:sticky; top:96px; min-height:440px; padding:30px 22px; }
-.pos-empty-icon { display:grid; place-items:center; width:56px; height:56px; margin-bottom:16px; border-radius:12px; background:#e9eee8; color:var(--green); }
-.pos-selection-empty h2 { margin:6px 0; color:var(--green); font:700 24px "Space Grotesk",sans-serif; }
+.pos-empty-icon { display:grid; place-items:center; width:56px; height:56px; margin-bottom:16px; border-radius:12px; background:#eff6ff; color:var(--green); }
+.pos-selection-empty h2 { margin:6px 0; color:var(--green); font:700 24px "Segoe UI",sans-serif; }
 .pos-step-note { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:8px; margin-top:25px; color:#657068; font-size:9px; }
-.pos-step-note span { display:grid; place-items:center; width:20px; height:20px; border-radius:50%; background:#dbed69; color:#343a00; font:700 10px "JetBrains Mono",monospace; }
-.pos-ask-link { margin-top:10px; background:#174f36; }
+.pos-step-note span { display:grid; place-items:center; width:20px; height:20px; border-radius:50%; background:#dbeafe; color:#1e40af; font:700 10px "Consolas",monospace; }
+.pos-ask-link { margin-top:10px; background:#1d4ed8; }
 .pos-invoice-panel { position:sticky; top:96px; padding:15px; }
-.pos-customer-note { display:flex; align-items:center; gap:9px; border-radius:7px; padding:9px; background:#f1eee5; }
-.pos-customer-icon { display:grid; place-items:center; width:32px; height:32px; border-radius:6px; background:#dce8dc; color:var(--green); }
+.pos-customer-note { display:flex; align-items:center; gap:9px; border-radius:7px; padding:9px; background:#f3f4f6; }
+.pos-customer-icon { display:grid; place-items:center; width:32px; height:32px; border-radius:6px; background:#dbeafe; color:var(--green); }
 .pos-customer-note>div { display:flex; flex-direction:column; gap:2px; }
 .pos-customer-note b { font-size:11px; }
 .pos-customer-note small { color:#6c756e; font-size:9px; }
 .pos-invoice-lines { display:flex; max-height:calc(100vh - 460px); min-height:120px; flex-direction:column; gap:7px; overflow-y:auto; margin:10px 0; }
-.pos-invoice-line { border-radius:7px; padding:9px; background:#f5f4ef; }
+.pos-invoice-line { border-radius:7px; padding:9px; background:#f9fafb; }
 .pos-invoice-line-head { display:flex; align-items:flex-start; gap:6px; }
-.pos-line-number { display:grid; flex-shrink:0; place-items:center; width:18px; height:18px; border-radius:4px; background:#e1e9e1; color:var(--green); font:600 9px "JetBrains Mono",monospace; }
+.pos-line-number { display:grid; flex-shrink:0; place-items:center; width:18px; height:18px; border-radius:4px; background:#dbeafe; color:var(--green); font:600 9px "Consolas",monospace; }
 .pos-invoice-line-head>b { flex:1; color:var(--green); font-size:11px; line-height:1.4; }
 .pos-invoice-line-head button { border:0; padding:2px; background:transparent; color:#738078; }
 .pos-invoice-line>p { margin:5px 0; padding-left:24px; color:#69736c; font-size:9px; }
-.pos-invoice-line>div:last-child { display:flex; justify-content:space-between; padding-left:24px; color:#626b64; font:500 9px "JetBrains Mono",monospace; }
+.pos-invoice-line>div:last-child { display:flex; justify-content:space-between; padding-left:24px; color:#626b64; font:500 9px "Consolas",monospace; }
 .pos-invoice-line>div:last-child b { color:var(--ink); }
 .pos-invoice-empty { display:flex; min-height:150px; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#768078; font-size:11px; }
 .pos-invoice-total { display:flex; flex-direction:column; gap:5px; margin-top:10px; border-radius:9px; padding:12px; background:var(--green); color:#fff; }
-.pos-invoice-total>span { color:#c5dbcb; font:700 9px "JetBrains Mono",monospace; letter-spacing:.08em; }
+.pos-invoice-total>span { color:#dbeafe; font:700 9px "Consolas",monospace; letter-spacing:.08em; }
 .pos-invoice-total strong { color:var(--lime); font-size:25px; letter-spacing:-.04em; }
-.pos-invoice-total small { color:#d5e3d8; font-size:9px; }
-.pos-open-invoice { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; min-height:42px; margin-top:9px; border:0; border-radius:7px; background:#dbed69; color:#243000; font-size:11px; font-weight:700; }
+.pos-invoice-total small { color:#dbeafe; font-size:9px; }
+.pos-open-invoice { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; min-height:42px; margin-top:9px; border:0; border-radius:7px; background:#dbeafe; color:#1e40af; font-size:11px; font-weight:700; }
 .pos-clear-invoice { display:block; margin:7px auto 0; border:0; background:transparent; color:#9b3838; font-size:10px; font-weight:700; }
 .pos-invoice-footnote { display:flex; align-items:center; justify-content:center; gap:5px; margin-top:11px; color:#737c75; font-size:9px; }
-.pos-sync-note { margin-top:12px; color:#737c75; font:500 9px "JetBrains Mono",monospace; text-align:right; }
+.pos-sync-note { margin-top:12px; color:#737c75; font:500 9px "Consolas",monospace; text-align:right; }
 @media (max-width:1199px) { .pos-header-inner { flex-wrap:wrap; } .pos-top-nav { display:none; } .pos-workspace { grid-template-columns:minmax(280px,1fr) minmax(340px,1.2fr); } .pos-invoice-column { grid-column:1 / -1; } .pos-invoice-panel { position:static; } .pos-invoice-lines { max-height:260px; } }
 @media (max-width:767px) { .pos-header-inner { min-height:66px; padding:9px 12px; gap:7px; } .pos-brand { min-width:0; gap:8px; } .pos-brand-mark { width:36px; height:36px; font-size:21px; } .pos-brand-copy b { font-size:17px; } .pos-brand-copy small { font-size:7px; } .pos-header-actions { gap:5px; } .pos-live-badge { padding:7px; font-size:8px; } .pos-header-count { display:none; } .pos-invoice-button { gap:5px; padding:8px; font-size:11px; } .pos-invoice-button svg { width:16px; } .pos-main { padding:10px 10px 100px; } .pos-shift-bar { align-items:flex-start; flex-direction:column; gap:4px; padding:9px; } .pos-shift-title { flex-wrap:wrap; font-size:9px; } .pos-shift-note { margin-left:0; } .pos-shift-meta { flex-wrap:wrap; font-size:8px; } .pos-workspace { grid-template-columns:minmax(0,1fr); gap:10px; } .pos-column { gap:10px; } .pos-panel { padding:12px; border-radius:9px; } .pos-search-panel { padding:13px; } .pos-panel-heading h1,.pos-panel-heading h2 { font-size:18px; } .pos-product-list,.pos-price-list { max-height:none; min-height:0; overflow:visible; } .pos-selection-empty,.pos-invoice-panel { position:static; } .pos-selection-empty { min-height:260px; } .pos-invoice-lines { max-height:300px; } .pos-price-amount { font-size:24px; } .pos-sync-note { padding-bottom:10px; } }
 
@@ -165,14 +169,35 @@ h1,h2,h3,.pos-brand-copy b { font-family:"Space Grotesk", "Hanken Grotesk", ui-s
 .pos-quantity-control button,.pos-quantity-control input { min-height:44px; }
 .pos-product-heading h3 { font-size:16px; }
 .pos-product-price { font-size:12px; }
-.pos-suggestion { display:grid; gap:9px; margin:12px 0; border:2px solid var(--green); border-radius:10px; padding:14px; background:#f3f7ed; }
+.pos-suggestion { display:grid; gap:9px; margin:12px 0; border:2px solid var(--green); border-radius:10px; padding:14px; background:#f9fafb; }
 .pos-suggestion label { color:var(--green); font-size:14px; font-weight:800; }
 .pos-suggestion input { width:100%; min-height:48px; border:1px solid var(--line); border-radius:8px; padding:8px 12px; background:white; font-size:18px; font-weight:700; }
 .pos-suggestion p { margin:0; font-size:13px; line-height:1.5; }
 .pos-suggestion button { min-height:46px; border:0; border-radius:8px; padding:10px; background:var(--green); color:#fff; font-size:14px; font-weight:700; }
 .pos-suggestion button:disabled { background:#aeb5ae; }
+.pos-eyebrow { font-size:11px; letter-spacing:.045em; }
+.pos-category-label { font-size:10px; }
+.pos-source-row,.pos-min-quantity,.pos-wholesale-hint,.pos-price-warning { font-size:12px; line-height:1.5; }
+.pos-price-card-footer>span,.pos-detail-bottom>span,.pos-invoice-line>p,.pos-customer-note small,.pos-invoice-total small,.pos-invoice-footnote,.pos-step-note { font-size:11px; line-height:1.5; }
+.pos-panel { border-color:#e5e7eb; }
+
+.pos-top-nav .pos-nav-item { display:flex; align-items:center; gap:5px; }
+.mobile-nav { grid-template-columns:repeat(4,1fr); }
+
+.pos-quick-search button { border-radius:999px; }
+.pos-price-card,.pos-invoice-line { border-color:#e5e7eb; }
+.pos-live-badge { font-family:"Segoe UI",ui-sans-serif,system-ui,sans-serif; font-size:11px; }
+.pos-suggestion { border-width:1px; background:#f9fafb; }
+@media (min-width:1200px) {
+  .pos-workspace { grid-template-columns:minmax(320px,.95fr) minmax(0,1.4fr); }
+  .pos-invoice-column { grid-column:1 / -1; }
+  .pos-invoice-panel { position:static; }
+  .pos-invoice-lines { max-height:260px; }
+}
+.pos-logout-button,.pos-close-detail,.pos-icon-action { min-height:44px; min-width:44px; }
+.pos-invoice-line>p,.pos-invoice-line>div:last-child,.pos-customer-note small,.pos-invoice-total small,.pos-invoice-footnote,.pos-step-note { font-size:12px; line-height:1.5; }
 @media (max-width:767px) {
-  .pos-search-panel { position:sticky; top:66px; z-index:20; box-shadow:0 4px 12px rgba(28,28,23,.12); }
+  .pos-search-panel { position:static; }
   .pos-search-field input { font-size:16px; }
   .pos-search-field kbd { display:none; }
   .pos-variant-chip { padding:9px 11px; }
@@ -181,4 +206,11 @@ h1,h2,h3,.pos-brand-copy b { font-family:"Space Grotesk", "Hanken Grotesk", ui-s
   .pos-price-card-footer>button { width:100%; font-size:14px; }
   .pos-quantity-control input { width:72px; font-size:17px; }
   .pos-quantity-control span { font-size:12px; }
+}
+
+/* Keep the employee navigation inside the viewport at laptop/tablet widths. */
+@media (min-width:768px) and (max-width:1399px) {
+  .pos-header-inner { flex-wrap:wrap; }
+  .pos-top-nav { display:flex; order:3; width:100%; min-width:0; overflow-x:auto; }
+  .pos-header-actions { margin-left:auto; }
 }

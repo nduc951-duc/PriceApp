@@ -1,8 +1,9 @@
 export type TextChunk = { index: number; content: string; start: number; end: number };
-export const CHUNKER_VERSION = "lines-1100-overlap160-v2";
+export type RagChunkSettings = { maxCharacters: number; overlapCharacters: number };
+export type RecordChunk = TextChunk & { heading: string | null };
+export const CHUNKER_VERSION = "records-1100-overlap160-v3";
 
-const DEFAULT_CHUNK_CHARS = 1_100;
-const DEFAULT_OVERLAP_CHARS = 160;
+export const DEFAULT_CHUNK_SETTINGS: RagChunkSettings = { maxCharacters: 1_100, overlapCharacters: 160 };
 
 /** Canonical text used by chunk offsets and the review preview. */
 export function normalizeChunkSource(input: string): string {
@@ -13,8 +14,8 @@ export function normalizeChunkSource(input: string): string {
 /** Splits reviewed page text on line/sentence boundaries, then adds a small overlap. */
 export function chunkText(
   input: string,
-  chunkChars = DEFAULT_CHUNK_CHARS,
-  overlapChars = DEFAULT_OVERLAP_CHARS,
+  chunkChars = DEFAULT_CHUNK_SETTINGS.maxCharacters,
+  overlapChars = DEFAULT_CHUNK_SETTINGS.overlapCharacters,
 ): TextChunk[] {
   if (!Number.isInteger(chunkChars) || chunkChars < 200) throw new Error("chunkChars must be at least 200");
   if (!Number.isInteger(overlapChars) || overlapChars < 0 || overlapChars >= chunkChars) {
@@ -78,5 +79,27 @@ export function chunkText(
     currentEnd = unit.end;
   }
   push();
+  return chunks;
+}
+
+/** Keeps OCR lines as separate records and carries an explicit trailing-colon heading. */
+export function chunkRecords(input: string, settings: RagChunkSettings = DEFAULT_CHUNK_SETTINGS): RecordChunk[] {
+  const { maxCharacters, overlapCharacters } = settings;
+  if (!Number.isInteger(maxCharacters) || maxCharacters < 200 || maxCharacters > 4_000) throw new Error("maxCharacters must be between 200 and 4000");
+  if (!Number.isInteger(overlapCharacters) || overlapCharacters < 0 || overlapCharacters >= maxCharacters) throw new Error("overlapCharacters must be smaller than maxCharacters");
+  const source = normalizeChunkSource(input);
+  const chunks: RecordChunk[] = [];
+  let heading: string | null = null;
+  for (const line of source.matchAll(/[^\n]+/g)) {
+    const value = line[0];
+    if (/^.{1,90}:$/.test(value.trim())) { heading = value.trim().slice(0, -1); continue; }
+    const pieces = value.length <= maxCharacters
+      ? [{ start: line.index, end: line.index + value.length }]
+      : chunkText(value, maxCharacters, overlapCharacters).map((piece) => ({ start: line.index + piece.start, end: line.index + piece.end }));
+    for (const piece of pieces) {
+      const content = source.slice(piece.start, piece.end).trim();
+      if (content) chunks.push({ index: chunks.length, content, start: piece.start, end: piece.end, heading });
+    }
+  }
   return chunks;
 }

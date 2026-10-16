@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Button, Select, TextInput } from "flowbite-react";
 import {
   Home,
+  ClipboardList,
   Image as ImageIcon,
   LoaderCircle,
   MessageCircle,
@@ -19,12 +21,17 @@ import {
   X,
 } from "lucide-react";
 import { cacheSnapshot, readSnapshot } from "@/features/offline/cache";
-import { formatVnd, priceSchema, priceWriteErrorMessage } from "@/features/pricing/validation";
+import { formatVnd, parsePriceInput, priceSchema, priceWriteErrorMessage } from "@/features/pricing/validation";
 import { selectBestPrice } from "@/features/pricing/select-price";
+import { hasInvoicePriceChanged } from "@/features/pricing/invoice-price-review";
+import { priceTierLabel } from "@/features/pricing/price-tier";
 import { matchesCatalogQuery } from "@/features/search/parser";
 import { fetchCatalog } from "@/lib/api/catalog";
 import { fetchSourceSignedUrl } from "@/lib/api/source-files";
 import { updateCatalogItem, updatePrice, undoPrice } from "@/lib/api/prices";
+import { useModalFocus } from "@/hooks/use-modal-focus";
+import { useAuthLogout } from "@/components/auth-actions-context";
+import { CustomerOrderInbox } from "@/components/customer-order-inbox";
 
 type Item = {
   id: number;
@@ -132,30 +139,29 @@ function displayPackageName(packageName: string) {
 }
 
 function displayItemPackageName(item: Item) {
-  if (item.name === "Móc U") {
-    if (item.packageQuantity === 10) return "10 con/bịch";
-    if (item.packageQuantity === 100) return "100 con/bịch";
-    if (item.packageQuantity === 1) return "1 con";
-  }
   return displayPackageName(item.packageName);
 }
 
 function displayPriceType(item: Item) {
-  if (item.name === "Móc U")
-    return item.priceType === "wholesale" ? "Giá sỉ" : "Giá lẻ";
-  if (item.packageName.startsWith("Đầu tròn + lá")) return "Đầu tròn + lá";
-  if (item.packageName.startsWith("Đầu dù")) return "Đầu dù";
-  return item.priceType === "wholesale" ? "Giá sỉ" : "Giá lẻ";
+  const tier = priceTierLabel(item.priceType);
+  if (item.name === "Móc U") return tier;
+  if (item.packageName.startsWith("Đầu tròn + lá")) return `Đầu tròn + lá · ${tier}`;
+  if (item.packageName.startsWith("Đầu dù")) return `Đầu dù · ${tier}`;
+  return tier;
 }
 
 const recent = ["bulong 8ly 3f", "tac ke 6x50", "day cap inox 6 ly"];
 export function PriceApp() {
+  const logout = useAuthLogout();
+  const [customerOrdersOpen, setCustomerOrdersOpen] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [catalogEntries, setCatalogEntries] = useState<CatalogEntry[]>([]);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [online, setOnline] = useState(true);
+  const [serverAvailable, setServerAvailable] = useState(true);
   const [synced, setSynced] = useState("");
+  const [syncMessage, setSyncMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [history, setHistory] = useState<UndoEntry[]>([]);
@@ -174,40 +180,75 @@ export function PriceApp() {
   const [sourceImageError, setSourceImageError] = useState("");
   const [catalogEditor, setCatalogEditor] = useState<CatalogEditor | null>(null);
   const [savingCatalog, setSavingCatalog] = useState(false);
+  const [chatPriceReview, setChatPriceReview] = useState<{ priceId: number; expectedVersion: number; current: Item | null; acknowledged: boolean; requiresFreshCheck: boolean } | null>(null);
+  const detailDialogRef = useModalFocus<HTMLElement>(detailOpen && !catalogEditor && !invoiceOpen, () => setDetailOpen(false));
+  const catalogDialogRef = useModalFocus<HTMLElement>(Boolean(catalogEditor), () => setCatalogEditor(null));
+  const invoiceDialogRef = useModalFocus<HTMLElement>(invoiceOpen, () => setInvoiceOpen(false));
 
   useEffect(() => {
     const updateNetwork = () => setOnline(navigator.onLine);
     updateNetwork();
-    addEventListener("online", updateNetwork);
+    const handleOnline = () => {
+      updateNetwork();
+      void load();
+    };
+    addEventListener("online", handleOnline);
     addEventListener("offline", updateNetwork);
-    async function load() {
-      if (!navigator.onLine) {
+    async function restoreSnapshot() {
+      try {
         const cached = await readSnapshot<Item[]>("catalog");
+        const cachedEntries = await readSnapshot<CatalogEntry[]>("catalog-entries");
         if (cached) {
           setItems(cached.data);
           setSynced(cached.syncedAt);
+          const params = new URLSearchParams(window.location.search);
+          const expectedPriceId = Number(params.get("priceId"));
+          const expectedPriceVersion = Number(params.get("priceVersion"));
+          if (Number.isSafeInteger(expectedPriceId) && expectedPriceId > 0 && Number.isSafeInteger(expectedPriceVersion) && expectedPriceVersion > 0) {
+            setChatPriceReview({ priceId: expectedPriceId, expectedVersion: expectedPriceVersion, current: cached.data.find((item) => item.priceId === expectedPriceId) ?? null, acknowledged: false, requiresFreshCheck: true });
+          }
         }
-        const cachedEntries = await readSnapshot<CatalogEntry[]>("catalog-entries");
         if (cachedEntries) {
           setCatalogEntries(cachedEntries.data);
           const requestedVariant = Number(new URLSearchParams(window.location.search).get("variantId"));
           const matched = cachedEntries.data.find((entry) => entry.variantId === requestedVariant);
           if (matched) setSelected({ name: matched.name, spec: matched.spec });
         }
+        return Boolean(cached || cachedEntries);
+      } catch {
+        return false;
+      }
+    }
+    async function load() {
+      if (!navigator.onLine) {
+        await restoreSnapshot();
         setLoading(false);
         return;
       }
       let response;
       try { response = await fetchCatalog(); }
       catch {
-        setError("Không tải được bảng giá.");
+        const restored = await restoreSnapshot();
+        setServerAvailable(false);
+        setError(restored ? "Không thể kết nối với máy chủ. Đang xem bản giá đã lưu; hãy tải lại khi có mạng." : "Không tải được bảng giá. Kiểm tra kết nối rồi thử lại.");
         setLoading(false);
         return;
       }
       const entries = response.entries;
       const loaded = response.prices;
+      const params = new URLSearchParams(window.location.search);
+      const expectedPriceId = Number(params.get("priceId"));
+      const expectedPriceVersion = Number(params.get("priceVersion"));
+      if (Number.isSafeInteger(expectedPriceId) && expectedPriceId > 0 && Number.isSafeInteger(expectedPriceVersion) && expectedPriceVersion > 0) {
+        const currentPrice = loaded.find((item) => item.priceId === expectedPriceId) ?? null;
+        if (!currentPrice || currentPrice.version !== expectedPriceVersion) {
+          setChatPriceReview({ priceId: expectedPriceId, expectedVersion: expectedPriceVersion, current: currentPrice, acknowledged: false, requiresFreshCheck: false });
+        }
+      }
       setItems(loaded);
       setCatalogEntries(entries);
+      setServerAvailable(true);
+      setError("");
       const requestedVariant = Number(new URLSearchParams(window.location.search).get("variantId"));
       const matchedVariant = entries.find((entry) => entry.variantId === requestedVariant);
       if (matchedVariant) {
@@ -216,17 +257,30 @@ export function PriceApp() {
           spec: matchedVariant.spec,
         });
       }
-      await cacheSnapshot("catalog", loaded);
-      await cacheSnapshot("catalog-entries", entries);
       setSynced(response.syncedAt);
+      setSyncMessage("");
       setLoading(false);
     }
     load();
     return () => {
-      removeEventListener("online", updateNetwork);
+      removeEventListener("online", handleOnline);
       removeEventListener("offline", updateNetwork);
     };
   }, []);
+
+  useEffect(() => {
+    if (loading || !navigator.onLine || (items.length === 0 && catalogEntries.length === 0)) return;
+    let active = true;
+    void Promise.all([
+      cacheSnapshot("catalog", items),
+      cacheSnapshot("catalog-entries", catalogEntries),
+    ]).then(() => {
+      if (active) setSyncMessage("");
+    }).catch(() => {
+      if (active) setSyncMessage("Không lưu được bản ngoại tuyến trên thiết bị này.");
+    });
+    return () => { active = false; };
+  }, [items, catalogEntries, loading]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -270,34 +324,39 @@ export function PriceApp() {
         items: groupItems,
         variants: [...new Set(entries.map((entry) => entry.spec))],
         minPrice:
-          groupItems.length > 0
-            ? Math.min(...groupItems.map((item) => item.price))
+          groupItems.some((item) => item.status === "verified")
+            ? Math.min(...groupItems.filter((item) => item.status === "verified").map((item) => item.price))
             : null,
         maxPrice:
-          groupItems.length > 0
-            ? Math.max(...groupItems.map((item) => item.price))
+          groupItems.some((item) => item.status === "verified")
+            ? Math.max(...groupItems.filter((item) => item.status === "verified").map((item) => item.price))
             : null,
         wholesaleFrom: groupItems.some(
           (item) =>
+            item.status === "verified" &&
             item.priceType === "wholesale" &&
+            item.unit === (groupItems[0]?.unit ?? item.unit) &&
             !item.packageNote.includes("Chưa rõ số lượng tối thiểu"),
         )
           ? Math.min(
               ...groupItems
                 .filter(
                   (item) =>
+                    item.status === "verified" &&
                     item.priceType === "wholesale" &&
+                    item.unit === (groupItems[0]?.unit ?? item.unit) &&
                     !item.packageNote.includes("Chưa rõ số lượng tối thiểu"),
                 )
-                .map((item) => item.packageQuantity),
+                .filter((item) => item.unit === (groupItems[0]?.unit ?? item.unit))
+                .map((item) => item.packageQuantity * Math.max(1, item.minimumQuantity)),
             )
           : null,
         smallestRetailPackage: groupItems.some(
-          (item) => item.priceType === "retail",
+          (item) => item.status === "verified" && item.priceType === "retail",
         )
           ? Math.min(
               ...groupItems
-                .filter((item) => item.priceType === "retail")
+                .filter((item) => item.status === "verified" && item.priceType === "retail")
                 .map((item) => item.packageQuantity),
             )
           : null,
@@ -305,13 +364,12 @@ export function PriceApp() {
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "vi"));
   }, [catalogEntries, items]);
-  const shown = useMemo(() => {
-    return query.trim()
-      ? groups.filter((group) =>
-          matchesCatalogQuery(query, `${group.name} ${group.variants.join(" ")}`),
-        )
-      : groups;
-  }, [groups, query]);
+  const shown = useMemo(() => groups.flatMap((group) => {
+    const variants = query.trim()
+      ? group.variants.filter((spec) => matchesCatalogQuery(query, `${group.name} ${spec}`))
+      : group.variants;
+    return variants.length ? [{ ...group, variants }] : [];
+  }), [groups, query]);
   const selectedPrices = selected
     ? items.filter(
         (item) =>
@@ -357,7 +415,8 @@ export function PriceApp() {
         unitPrice: item.price,
         requestedQuantity: packageCount * item.packageQuantity,
         total: packageCount * item.price,
-        eligible: packageCount >= Math.max(1, item.minimumQuantity) &&
+        eligible: item.status === "verified" &&
+          packageCount >= Math.max(1, item.minimumQuantity) &&
           !(item.priceType === "wholesale" && item.packageNote.includes("Chưa rõ số lượng tối thiểu")),
       };
     })
@@ -374,8 +433,8 @@ export function PriceApp() {
     const currentPrices = new Map(items.map((item) => [item.priceId, item]));
     return invoice.flatMap((line) => {
       const item = currentPrices.get(line.item.priceId);
-      if (!item) return [];
-      return [{ ...line, item, unitPrice: item.price, total: line.packageCount * item.price }];
+      if (!item || item.status !== "verified") return [];
+      return [{ ...line, item, unitPrice: item.price, total: line.packageCount * item.price, priceChanged: hasInvoicePriceChanged(line.item, item) }];
     });
   }, [invoice, items, loading]);
 
@@ -395,14 +454,51 @@ export function PriceApp() {
       localStorage.setItem("gia-chuan-invoice", JSON.stringify(invoice));
   }, [invoice, invoiceReady]);
 
-  function addToInvoice(option: {
+  async function addToInvoice(option: {
     item: Item;
     packageCount: number;
     requestedQuantity: number;
     unitPrice: number;
     total: number;
   }) {
-    const key = String(option.item.priceId);
+    if (option.item.status !== "verified") {
+      setError("Chỉ có thể thêm mức giá đã được duyệt vào báo giá.");
+      return;
+    }
+    if (!navigator.onLine) {
+      setError("Cần kết nối mạng để kiểm tra phiên bản giá và bao bì hiện hành trước khi thêm vào báo giá.");
+      return;
+    }
+    if (chatPriceReview?.priceId === option.item.priceId && (chatPriceReview.requiresFreshCheck || option.item.version !== chatPriceReview.expectedVersion) && !chatPriceReview.acknowledged) {
+      setError("Giá trong kết quả hỏi đáp đã đổi. Hãy xem và xác nhận giá hiện tại trước khi thêm vào báo giá.");
+      setInvoiceOpen(true);
+      return;
+    }
+    let latestCatalog: Awaited<ReturnType<typeof fetchCatalog>>;
+    try { latestCatalog = await fetchCatalog(); }
+    catch {
+      setError("Không xác minh được giá hiện hành. Hãy thử lại trước khi thêm vào báo giá.");
+      return;
+    }
+    const latestItem = latestCatalog.prices.find((item) => item.priceId === option.item.priceId);
+    if (!latestItem) {
+      setItems(latestCatalog.prices);
+      setError("Mức giá này đã hết hiệu lực hoặc không còn trong bảng giá. Hãy chọn lại.");
+      return;
+    }
+    if (latestItem.status !== "verified") {
+      setItems(latestCatalog.prices);
+      setError("Mức giá này chưa được duyệt để đưa vào báo giá. Hãy chọn mức giá đã duyệt.");
+      return;
+    }
+    if (hasInvoicePriceChanged(option.item, latestItem)) {
+      setItems(latestCatalog.prices);
+      setChatPriceReview({ priceId: latestItem.priceId, expectedVersion: option.item.version, current: latestItem, acknowledged: false, requiresFreshCheck: false });
+      setError("Giá hoặc bao bì vừa đổi. Hãy xem lại và xác nhận mức hiện tại trước khi thêm.");
+      return;
+    }
+    const checkedOption = { ...option, item: latestItem, unitPrice: latestItem.price, total: option.packageCount * latestItem.price };
+    const key = String(checkedOption.item.priceId);
     setInvoice((current) => {
       const existing = current.find((line) => line.key === key);
       if (!existing)
@@ -410,28 +506,29 @@ export function PriceApp() {
           ...current,
           {
             key,
-            item: option.item,
-            requestedQuantity: option.requestedQuantity,
-            packageCount: option.packageCount,
-            unitPrice: option.unitPrice,
-            total: option.total,
+            item: checkedOption.item,
+            requestedQuantity: checkedOption.requestedQuantity,
+            packageCount: checkedOption.packageCount,
+            unitPrice: checkedOption.unitPrice,
+            total: checkedOption.total,
           },
         ];
       return current.map((line) =>
         line.key === key
           ? {
               ...line,
+              item: checkedOption.item,
               requestedQuantity:
-                line.requestedQuantity + option.requestedQuantity,
-              packageCount: line.packageCount + option.packageCount,
-              unitPrice: option.unitPrice,
-              total: line.total + option.total,
+                line.requestedQuantity + checkedOption.requestedQuantity,
+              packageCount: line.packageCount + checkedOption.packageCount,
+              unitPrice: checkedOption.unitPrice,
+              total: line.total + checkedOption.total,
             }
           : line,
       );
     });
     setSelected(null);
-    setPackageCounts((current) => ({ ...current, [option.item.priceId]: "0" }));
+    setPackageCounts((current) => ({ ...current, [checkedOption.item.priceId]: "0" }));
     setQuery("");
     setTimeout(
       () =>
@@ -444,6 +541,43 @@ export function PriceApp() {
 
   async function copyQuote() {
     if (activeInvoice.length === 0) return;
+    if (activeInvoice.length !== invoice.length) {
+      setQuoteMessage("Có dòng giá chưa được duyệt hoặc đã hết hiệu lực; hãy chọn lại trước khi sao chép báo giá.");
+      return;
+    }
+    if (!navigator.onLine) {
+      setQuoteMessage("Cần kết nối mạng để xác minh các mức giá hiện hành trước khi sao chép báo giá.");
+      return;
+    }
+    if (activeInvoice.some((line) => line.priceChanged)) {
+      setQuoteMessage("Giá hoặc phiên bản giá đã thay đổi. Hãy xác nhận giá hiện tại trước khi sao chép.");
+      return;
+    }
+    let latestCatalog: Awaited<ReturnType<typeof fetchCatalog>>;
+    try { latestCatalog = await fetchCatalog(); }
+    catch {
+      setQuoteMessage("Không xác minh được giá hiện hành. Hãy thử lại trước khi sao chép báo giá.");
+      return;
+    }
+    const freshById = new Map(latestCatalog.prices.map((item) => [item.priceId, item]));
+    const unverifiedLine = invoice.find((line) => freshById.get(line.item.priceId)?.status !== "verified");
+    if (unverifiedLine) {
+      setItems(latestCatalog.prices);
+      setQuoteMessage("Có dòng giá chưa được duyệt hoặc đã hết hiệu lực; hãy chọn lại trước khi sao chép báo giá.");
+      return;
+    }
+    const changedLine = activeInvoice.find((line) => {
+      const latest = freshById.get(line.item.priceId);
+      return !latest || hasInvoicePriceChanged(line.item, latest);
+    });
+    if (changedLine) {
+      setItems(latestCatalog.prices);
+      const latest = freshById.get(changedLine.item.priceId);
+      if (latest) setChatPriceReview({ priceId: latest.priceId, expectedVersion: changedLine.item.version, current: latest, acknowledged: false, requiresFreshCheck: false });
+      setQuoteMessage(latest ? "Giá hoặc bao bì vừa đổi. Hãy xác nhận lại rồi mới sao chép." : "Một mức giá đã hết hiệu lực. Hãy chọn lại sản phẩm trong bảng hiện tại.");
+      return;
+    }
+    setItems(latestCatalog.prices);
     const lines = activeInvoice.map((line, index) =>
       `${index + 1}. ${line.item.name} · ${displaySpecification(line.item.variantSpec)} · ${line.packageCount} ${displayItemPackageName(line.item)} × ${formatVnd(line.item.price)} = ${formatVnd(line.packageCount * line.item.price)}`,
     );
@@ -522,6 +656,11 @@ export function PriceApp() {
       setError("Đang ngoại tuyến: chỉ xem được bảng giá đã lưu. Hãy kết nối mạng để sửa giá.");
       return;
     }
+    const amount = form.priceId ? parsePriceInput(form.amount) : null;
+    if (form.priceId && (amount === null || !priceSchema.safeParse(amount).success)) {
+      setError("Giá phải là số không âm, tối đa 2 chữ số thập phân.");
+      return;
+    }
     setSavingCatalog(true);
     setError("");
     let result;
@@ -541,7 +680,7 @@ export function PriceApp() {
         priceId: form.priceId,
         priceType: form.priceId ? form.priceType as "retail" | "wholesale" | "dealer" : null,
         minimumQuantity: form.priceId ? Number(form.minimumQuantity) : null,
-        amount: form.priceId ? Number(form.amount.replace(/[^\d.]/g, "")) : null,
+        amount,
         expectedVersion: form.expectedVersion,
       }, navigator.onLine);
     } catch (writeError) {
@@ -586,9 +725,11 @@ export function PriceApp() {
       setEditing(null);
       return;
     }
-    const parsed = priceSchema.safeParse(raw.replace(/\D/g, ""));
+    const amount = parsePriceInput(raw);
+    const parsed = amount === null ? null : priceSchema.safeParse(amount);
     const item = items.find((candidate) => candidate.id === itemId);
-    if (!parsed.success || !item) {
+    if (!parsed?.success || !item) {
+      if (!parsed?.success) setError("Giá phải là số không âm, tối đa 2 chữ số thập phân.");
       setEditing(null);
       return;
     }
@@ -643,23 +784,25 @@ export function PriceApp() {
     <div className="min-h-screen">
       <header className="pos-header">
         <div className="pos-header-inner">
-          <Link href="/#sales-workspace" className="pos-brand" aria-label="Giá Chuẩn - về tra cứu"><span className="pos-brand-mark">đ</span><span className="pos-brand-copy"><b>Giá Chuẩn</b><small>HỆ THỐNG QUẦY KIM KHÍ & BÁN LẺ</small></span></Link>
-          <nav className="pos-top-nav" aria-label="Điều hướng chính"><Link href="/#sales-workspace" className="pos-nav-active">Tra cứu & bán hàng</Link><Link href="/questions" className="pos-nav-item">Hỏi giá</Link><button type="button" className="pos-nav-item" onClick={() => document.getElementById("invoice-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Hóa đơn quầy</button><button type="button" className="pos-nav-item" onClick={() => selected ? setDetailOpen(true) : document.getElementById("product-search")?.focus()}>Cập nhật & sửa giá</button></nav>
-          <div className="pos-header-actions"><div className="pos-live-badge">{online ? <Wifi size={13}/> : <WifiOff size={13}/>}<span>{synced ? (online ? "ĐÃ CẬP NHẬT" : "ĐANG XEM BẢN LƯU") : online ? "ĐANG KẾT NỐI" : "NGOẠI TUYẾN"}</span></div><span className="pos-header-count">{loading ? "Đang tải…" : items.length + " mức giá"}</span><button type="button" onClick={() => setInvoiceOpen(true)} className="pos-invoice-button"><ShoppingCart size={18}/><span>Hóa đơn</span><b>{activeInvoice.length}</b></button></div>
+          <Link href="/staff#sales-workspace" className="pos-brand" aria-label="Giá Chuẩn - về tra cứu"><span className="pos-brand-mark">đ</span><span className="pos-brand-copy"><b>Giá Chuẩn</b><small>Khu vực nhân viên</small></span></Link>
+          <nav className="pos-top-nav" aria-label="Điều hướng chính"><Link href="/staff#sales-workspace" className="pos-nav-active">Tra cứu & bán hàng</Link><Link href="/questions" className="pos-nav-item">Hỏi giá</Link><Button type="button" className="pos-nav-item" onClick={() => setCustomerOrdersOpen(true)}><ClipboardList size={15}/> Đơn khách đặt</Button><Button type="button" className="pos-nav-item" onClick={() => document.getElementById("invoice-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Báo giá quầy</Button><Button type="button" className="pos-nav-item" onClick={() => selected ? setDetailOpen(true) : document.getElementById("product-search")?.focus()}>Cập nhật & sửa giá</Button></nav>
+          <div className="pos-header-actions"><div className="pos-live-badge">{online && serverAvailable ? <Wifi size={13}/> : <WifiOff size={13}/>}<span>{synced ? (online && serverAvailable ? "ĐÃ CẬP NHẬT" : "ĐANG XEM BẢN LƯU") : online && serverAvailable ? "ĐANG KẾT NỐI" : "NGOẠI TUYẾN"}</span></div><span className="pos-header-count">{loading ? "Đang tải…" : items.length + " mức giá"}</span><Button type="button" onClick={() => setInvoiceOpen(true)} className="pos-invoice-button"><ShoppingCart size={18}/><span>Báo giá</span><b>{activeInvoice.length}</b></Button>{logout && <Button type="button" onClick={() => void logout()} className="pos-logout-button">Đăng xuất</Button>}</div>
         </div>
       </header>
       <main className="pos-main">
         {error && <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p>}
-        <div className="pos-shift-bar"><div className="pos-shift-title"><span className="pos-shift-pulse"/> CA TRỰC · QUẦY CHÍNH <span className="pos-shift-note">Bảng giá vật tư · dữ liệu từ {new Set(items.flatMap(item => item.sourcePages)).size} trang nguồn</span></div><div className="pos-shift-meta"><span>{synced ? (online ? "Bảng giá đã đồng bộ" : "Đang dùng bảng giá đã lưu") : online ? "Đang tải dữ liệu Supabase…" : "Chưa có dữ liệu ngoại tuyến"}</span><span className="pos-meta-separator">•</span><span>{groups.length} nhóm hàng</span><span className="pos-meta-separator">•</span><span>{items.length} mức giá</span>{history.length > 0 && <button type="button" className="pos-undo-button" onClick={undo}><RotateCcw size={13}/> Hoàn tác sửa giá</button>}</div></div>
+        <div className="pos-shift-bar"><div className="pos-shift-title"><span className="pos-shift-pulse"/> CA TRỰC · QUẦY CHÍNH <span className="pos-shift-note">Bảng giá vật tư · dữ liệu từ {new Set(items.flatMap(item => item.sourcePages)).size} trang nguồn</span></div><div className="pos-shift-meta"><span>{synced ? (online ? "Bảng giá đã đồng bộ" : "Đang dùng bảng giá đã lưu") : online ? "Đang tải dữ liệu Supabase…" : "Chưa có dữ liệu ngoại tuyến"}</span><span className="pos-meta-separator">•</span><span>{groups.length} nhóm hàng</span><span className="pos-meta-separator">•</span><span>{items.length} mức giá</span>{history.length > 0 && <Button type="button" className="pos-undo-button" onClick={undo}><RotateCcw size={13}/> Hoàn tác sửa giá</Button>}</div></div>
+        {chatPriceReview && <section role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p>{chatPriceReview.requiresFreshCheck ? <>Đang ngoại tuyến nên chưa thể xác minh mức giá từ lúc hỏi đáp. Kết nối mạng và tải lại bảng giá trước khi thêm dòng này.</> : chatPriceReview.current ? <>Mức giá từ lúc hỏi đáp đã thay đổi (phiên bản {chatPriceReview.expectedVersion} → {chatPriceReview.current.version}). Giá hiện tại là <b>{formatVnd(chatPriceReview.current.price)}</b> / {displayItemPackageName(chatPriceReview.current)} ({chatPriceReview.current.packageQuantity} {chatPriceReview.current.unit} mỗi gói).</> : <>Mức giá từ lúc hỏi đáp đã hết hiệu lực hoặc không còn trong bảng giá hiện tại.</>} Hãy xem lại trước khi thêm vào báo giá.</p>{chatPriceReview.requiresFreshCheck ? null : chatPriceReview.current ? <Button type="button" className="mt-2 rounded-lg bg-amber-900 px-3 py-2 font-bold text-white" onClick={() => { const reviewed = chatPriceReview.current!; setInvoice((current) => current.map((line) => line.item.priceId === reviewed.priceId ? { ...line, item: reviewed, unitPrice: reviewed.price, requestedQuantity: line.packageCount * reviewed.packageQuantity, total: line.packageCount * reviewed.price } : line)); setChatPriceReview((current) => current ? { ...current, acknowledged: true } : null); setError(""); }}>Xác nhận giá hiện tại</Button> : <Button type="button" className="mt-2 rounded-lg bg-amber-900 px-3 py-2 font-bold text-white" onClick={() => { setChatPriceReview(null); setQuery(""); }}>Chọn lại từ bảng giá hiện tại</Button>}</section>}
         <div className="pos-workspace">
           <section id="sales-workspace" className="pos-column pos-catalog-column">
-            <div className="pos-panel pos-search-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">F1 · TRA CỨU NHANH</p><h1>Tìm vật tư</h1></div><Search className="text-[var(--green)]" size={23}/></div><label htmlFor="product-search" className="sr-only">Tìm tên hàng hoặc quy cách</label><div className="pos-search-field"><Search size={20}/><input id="product-search" value={query} onChange={event => setQuery(event.target.value)} aria-label="Tìm vật tư" placeholder="Tên hàng, mã hoặc quy cách…" autoComplete="off"/><kbd>F1</kbd></div>{!query && <div className="pos-quick-search">{recent.map(value => <button key={value} type="button" onClick={() => setQuery(value)}>{value}</button>)}</div>}</div>
-            <div className="pos-panel pos-results-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">DANH MỤC VẬT TƯ</p><h2>{query ? "Kết quả tìm kiếm" : "Chọn mặt hàng"}</h2></div><span className="pos-result-count">{loading ? "…" : shown.length}</span></div>{error && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}<div className="pos-product-list">{shown.map(group => <article key={group.category + "-" + group.name} className="pos-product-card"><div className="pos-product-heading"><div><span className="pos-category-label">{group.category}</span><h3>{group.name}</h3></div><span className="pos-product-price">{group.minPrice === null ? "Chưa có giá" : "Từ " + formatVnd(group.minPrice)}</span></div><div className="pos-variant-list">{group.variants.map(spec => <button key={spec} type="button" onClick={() => { setDetailOpen(false); setSelected({ name: group.name, spec }); }} className={"pos-variant-chip " + (selected?.name === group.name && selected.spec === spec ? "pos-variant-selected" : "")}><span>{displaySpecification(spec)}</span><small>{group.items.filter(item => item.variantSpec === spec).length ? group.items.filter(item => item.variantSpec === spec).length + " giá" : "Chưa có giá"}</small></button>)}</div>{group.wholesaleFrom !== null && <p className="pos-wholesale-hint">Giá sỉ từ {group.wholesaleFrom} {group.unit}</p>}</article>)}{!loading && shown.length === 0 && <div className="pos-empty-small"><Package size={22}/><span>Không tìm thấy mặt hàng phù hợp.</span></div>}</div></div>
+            <div className="pos-panel pos-search-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">F1 · TRA CỨU NHANH</p><h1>Tìm vật tư</h1></div><Search className="text-[var(--green)]" size={23}/></div><label htmlFor="product-search" className="sr-only">Tìm tên hàng hoặc quy cách</label><div className="pos-search-field"><Search size={20}/><TextInput id="product-search" value={query} onChange={event => setQuery(event.target.value)} aria-label="Tìm vật tư" placeholder="Tên hàng, mã hoặc quy cách…" autoComplete="off"/><kbd>F1</kbd></div>{!query && <div className="pos-quick-search">{recent.map(value => <Button key={value} type="button" onClick={() => setQuery(value)}>{value}</Button>)}</div>}</div>
+            <div className="pos-panel pos-results-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">DANH MỤC VẬT TƯ</p><h2>{query ? "Kết quả tìm kiếm" : "Chọn mặt hàng"}</h2></div><span className="pos-result-count">{loading ? "…" : error && items.length === 0 && catalogEntries.length === 0 ? "—" : shown.length}</span></div>{error && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}<div className="pos-product-list">{shown.map(group => <article key={group.category + "-" + group.name} className="pos-product-card"><div className="pos-product-heading"><div><span className="pos-category-label">{group.category}</span><h3>{group.name}</h3></div><span className="pos-product-price">{group.minPrice === null ? "Chưa có giá" : "Từ " + formatVnd(group.minPrice)}</span></div><div className="pos-variant-list">{group.variants.map(spec => <Button key={spec} type="button" onClick={() => { setDetailOpen(false); setSelected({ name: group.name, spec }); }} className={"pos-variant-chip " + (selected?.name === group.name && selected.spec === spec ? "pos-variant-selected" : "")}><span>{displaySpecification(spec)}</span><small>{group.items.filter(item => item.variantSpec === spec).length ? group.items.filter(item => item.variantSpec === spec).length + " giá" : "Chưa có giá"}</small></Button>)}</div>{group.wholesaleFrom !== null && <p className="pos-wholesale-hint">Giá sỉ từ {group.wholesaleFrom} {group.unit}</p>}</article>)}{!loading && shown.length === 0 && (error && items.length === 0 && catalogEntries.length === 0 ? <div className="pos-empty-small"><WifiOff size={22}/><span>Chưa tải được danh mục. Hãy thử tải lại khi có kết nối.<Button type="button" onClick={() => window.location.reload()} className="ml-2 min-h-11 rounded-md border border-[var(--line)] bg-white px-3 py-2 font-semibold">Thử tải lại</Button></span></div> : <div className="pos-empty-small"><Package size={22}/><span>Không tìm thấy mặt hàng phù hợp.</span></div>)}</div></div>
           </section>
-          <section className="pos-column pos-detail-column" aria-label="Chi tiết mặt hàng">{selected ? <div className="pos-panel pos-detail-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">MẶT HÀNG ĐANG CHỌN</p><h2>{selected.name}</h2></div><button type="button" className="pos-close-detail" onClick={() => setSelected(null)} aria-label="Bỏ chọn mặt hàng"><X size={18}/></button></div><div className="pos-spec-banner"><div><span className="pos-category-label">QUY CÁCH</span><b>{displaySpecification(selected.spec)}</b></div><button type="button" onClick={() => setDetailOpen(true)}><Pencil size={15}/> Chi tiết & sửa</button></div><div className="pos-source-row"><span>{selectedSourcePages.length ? "Nguồn sổ: trang " + selectedSourcePages.join(", ") : "Chưa gắn trang nguồn"}</span>{selectedSourceFiles.map(file => <button key={file} type="button" onClick={() => openSourceImage(file)} disabled={openingSource !== null}><ImageIcon size={14}/>{openingSource === file ? "Đang mở…" : "Xem ảnh"}</button>)}</div>{sourceImageError && <p role="alert" className="my-2 text-xs font-bold text-red-700">{sourceImageError}</p>}<div className="pos-suggestion"><label htmlFor="retail-package-count">Số lượng theo gói lẻ nhỏ nhất ({Number.isFinite(smallestRetailQuantity) ? smallestRetailQuantity : "?"} {retailUnit ?? "đơn vị"}/gói)</label><input id="retail-package-count" inputMode="numeric" pattern="[0-9]*" value={retailPackageCount} onChange={event => setRetailPackageCount(event.target.value.replace(/\D/g, ""))} aria-describedby="retail-package-help"/><p id="retail-package-help">{suggestedPrice ? <>Gợi ý: {suggestedPrice.packageCount} × {displayItemPackageName(suggestedPrice.item)} · <strong>{formatVnd(suggestedPrice.item.price)}/gói</strong> · thành tiền <strong>{formatVnd(suggestedPrice.total)}</strong></> : "Chưa có dòng giá đủ điều kiện và bao bì khớp chính xác số lượng này."}</p><button type="button" disabled={!suggestedPrice} onClick={() => { if (suggestedPrice) addToInvoice({ ...suggestedPrice, unitPrice: suggestedPrice.item.price, requestedQuantity: suggestedPrice.packageCount * suggestedPrice.item.packageQuantity }); }}>Thêm mức giá gợi ý vào báo giá</button></div><div className="pos-price-list">{priceOptions.length ? priceOptions.map(option => <article className="pos-price-card" key={option.item.priceId}><div className="pos-price-card-top"><div><span className={"pos-tier-badge " + (option.item.priceType === "wholesale" ? "pos-tier-wholesale" : "")}>{displayPriceType(option.item)}</span><b>{displayItemPackageName(option.item)}</b></div><span className={"pos-verification " + (option.item.status === "verified" ? "pos-verified" : "")}>{option.item.status === "verified" ? "Đã duyệt" : option.item.status === "unreadable" ? "Khó đọc" : "Cần đối chiếu"}</span></div><p className="pos-min-quantity">{option.item.packageQuantity} {option.item.unit} / {displayItemPackageName(option.item)}{option.item.minimumQuantity > 1 ? " · tối thiểu " + option.item.minimumQuantity + " gói" : ""}</p><div className="pos-price-amount">{formatVnd(option.unitPrice)}</div><div className="pos-quantity-control"><button type="button" aria-label={"Giảm " + displayItemPackageName(option.item)} onClick={() => setPackageCounts(current => ({ ...current, [option.item.priceId]: String(Math.max(0, option.packageCount - 1)) }))}>−</button><input aria-label={"Số lượng " + displayItemPackageName(option.item)} inputMode="numeric" value={packageCounts[option.item.priceId] ?? "0"} onChange={event => setPackageCounts(current => ({ ...current, [option.item.priceId]: event.target.value.replace(/\D/g, "") }))}/><button type="button" aria-label={"Tăng " + displayItemPackageName(option.item)} onClick={() => setPackageCounts(current => ({ ...current, [option.item.priceId]: String(option.packageCount + 1) }))}>+</button><span>{option.requestedQuantity} {option.item.unit}</span></div>{option.item.priceType === "wholesale" && option.item.packageNote.includes("Chưa rõ số lượng tối thiểu") && <p className="pos-price-warning">Chưa xác nhận ngưỡng áp dụng giá sỉ.</p>}<div className="pos-price-card-footer"><span>Tạm tính <b>{formatVnd(option.total)}</b></span><button type="button" disabled={!option.eligible} onClick={() => addToInvoice(option)}><ShoppingCart size={16}/>{option.eligible ? "Thêm vào báo giá" : option.packageCount === 0 ? "Nhập số gói" : "Chưa đủ điều kiện"}</button></div></article>) : <div className="pos-no-prices"><Package size={28}/><b>Chưa có giá cho quy cách này</b><span>Có thể kiểm tra ảnh nguồn hoặc cập nhật dữ liệu.</span><button type="button" onClick={() => setDetailOpen(true)}><Pencil size={15}/> Mở chi tiết sản phẩm</button></div>}</div><div className="pos-detail-bottom"><button type="button" onClick={() => setDetailOpen(true)}><ImageIcon size={16}/> Đối chiếu sổ giá</button>{selectedPrices.some(item => item.status !== "verified") && <span>Giá cần đối chiếu trước khi dùng</span>}</div></div> : <div className="pos-panel pos-selection-empty"><span className="pos-empty-icon"><Package size={28}/></span><p className="pos-eyebrow">CHI TIẾT GIAO DỊCH</p><h2>Chọn một quy cách</h2><p>Chọn sản phẩm ở cột trái để xem các mức giá, nguồn sổ và thêm số lượng vào hóa đơn.</p><Link href="/questions" className="pos-ask-link"><MessageCircle size={17}/> Hỏi giá bằng câu tự nhiên</Link><div className="pos-step-note"><span>1</span> Tìm mặt hàng <span>2</span> Chọn quy cách <span>3</span> Thêm vào hóa đơn</div></div>}</section>
-          <aside id="invoice-panel" className="pos-column pos-invoice-column"><div className="pos-panel pos-invoice-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">F4 · GIỎ HÀNG</p><h2>Hóa đơn quầy</h2></div><button type="button" className="pos-icon-action" onClick={() => setInvoiceOpen(true)} aria-label="Mở hóa đơn đầy đủ"><ShoppingCart size={18}/></button></div><div className="pos-customer-note"><span className="pos-customer-icon"><Package size={17}/></span><div><b>Hóa đơn tạm tính</b><small>{activeInvoice.length} mặt hàng · lưu trên thiết bị này</small></div></div><div className="pos-invoice-lines">{activeInvoice.length ? activeInvoice.map((line, index) => <article key={line.key} className="pos-invoice-line"><div className="pos-invoice-line-head"><span className="pos-line-number">{index + 1}</span><b>{line.item.name}</b><button type="button" aria-label={"Xóa " + line.item.name + " khỏi hóa đơn"} onClick={() => setInvoice(current => current.filter(item => item.key !== line.key))}><Trash2 size={15}/></button></div><p>{displaySpecification(line.item.variantSpec)} · {line.requestedQuantity} {line.item.unit}</p><div><span>{line.packageCount} × {formatVnd(line.unitPrice)}</span><b>{formatVnd(line.total)}</b></div></article>) : <div className="pos-invoice-empty"><ShoppingCart size={24}/><span>Chưa có sản phẩm trong hóa đơn.</span></div>}</div><div className="pos-invoice-total"><span>TỔNG CỘNG</span><strong>{formatVnd(activeInvoice.reduce((sum, line) => sum + line.total, 0))}</strong><small>Giá theo quy cách đã chọn · VND</small></div><button type="button" className="pos-open-invoice" onClick={() => setInvoiceOpen(true)}><ShoppingCart size={17}/> Xem & sao chép báo giá <kbd>F4</kbd></button>{invoice.length > 0 && <button type="button" className="pos-clear-invoice" onClick={() => setInvoice([])}>Xóa toàn bộ hóa đơn</button>}<div className="pos-invoice-footnote"><ShieldCheck size={15}/> Giá lấy từ bảng hiện tại; chưa thực hiện thanh toán.</div></div></aside>
+          <section className="pos-column pos-detail-column" aria-label="Chi tiết mặt hàng">{selected ? <div className="pos-panel pos-detail-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">MẶT HÀNG ĐANG CHỌN</p><h2>{selected.name}</h2></div><Button type="button" className="pos-close-detail" onClick={() => setSelected(null)} aria-label="Bỏ chọn mặt hàng"><X size={18}/></Button></div><div className="pos-spec-banner"><div><span className="pos-category-label">QUY CÁCH</span><b>{displaySpecification(selected.spec)}</b></div><Button type="button" onClick={() => setDetailOpen(true)}><Pencil size={15}/> Chi tiết & sửa</Button></div><div className="pos-source-row"><span>{selectedSourcePages.length ? "Nguồn sổ: trang " + selectedSourcePages.join(", ") : "Chưa gắn trang nguồn"}</span>{selectedSourceFiles.map(file => <Button key={file} type="button" onClick={() => openSourceImage(file)} disabled={openingSource !== null}><ImageIcon size={14}/>{openingSource === file ? "Đang mở…" : "Xem ảnh"}</Button>)}</div>{sourceImageError && <p role="alert" className="my-2 text-xs font-bold text-red-700">{sourceImageError}</p>}<div className="pos-suggestion"><label htmlFor="retail-package-count">Số lượng theo gói lẻ nhỏ nhất ({Number.isFinite(smallestRetailQuantity) ? smallestRetailQuantity : "?"} {retailUnit ?? "đơn vị"}/gói)</label><TextInput id="retail-package-count" inputMode="numeric" pattern="[0-9]*" value={retailPackageCount} onChange={event => setRetailPackageCount(event.target.value.replace(/\D/g, ""))} aria-describedby="retail-package-help"/><p id="retail-package-help">{suggestedPrice ? <>Gợi ý: {suggestedPrice.packageCount} × {displayItemPackageName(suggestedPrice.item)} · <strong>{formatVnd(suggestedPrice.item.price)}/gói</strong> · thành tiền <strong>{formatVnd(suggestedPrice.total)}</strong></> : "Chưa có dòng giá đủ điều kiện và bao bì khớp chính xác số lượng này."}</p><Button type="button" disabled={!suggestedPrice} onClick={() => { if (suggestedPrice) addToInvoice({ ...suggestedPrice, unitPrice: suggestedPrice.item.price, requestedQuantity: suggestedPrice.packageCount * suggestedPrice.item.packageQuantity }); }}>Thêm mức giá gợi ý vào báo giá</Button></div><div className="pos-price-list">{priceOptions.length ? priceOptions.map(option => <article className="pos-price-card" key={option.item.priceId}><div className="pos-price-card-top"><div><span className={"pos-tier-badge " + (option.item.priceType === "wholesale" ? "pos-tier-wholesale" : "")}>{displayPriceType(option.item)}</span><b>{displayItemPackageName(option.item)}</b></div><span className={"pos-verification " + (option.item.status === "verified" ? "pos-verified" : "")}>{option.item.status === "verified" ? "Đã duyệt" : option.item.status === "unreadable" ? "Khó đọc" : "Cần đối chiếu"}</span></div><p className="pos-min-quantity">{option.item.packageQuantity} {option.item.unit} / {displayItemPackageName(option.item)}{option.item.minimumQuantity > 1 ? " · tối thiểu " + option.item.minimumQuantity + " gói" : ""}</p><div className="pos-price-amount">{formatVnd(option.unitPrice)}</div><div className="pos-quantity-control"><Button type="button" aria-label={"Giảm " + displayItemPackageName(option.item)} onClick={() => setPackageCounts(current => ({ ...current, [option.item.priceId]: String(Math.max(0, option.packageCount - 1)) }))}>−</Button><TextInput aria-label={"Số lượng " + displayItemPackageName(option.item)} inputMode="numeric" value={packageCounts[option.item.priceId] ?? "0"} onChange={event => setPackageCounts(current => ({ ...current, [option.item.priceId]: event.target.value.replace(/\D/g, "") }))}/><Button type="button" aria-label={"Tăng " + displayItemPackageName(option.item)} onClick={() => setPackageCounts(current => ({ ...current, [option.item.priceId]: String(option.packageCount + 1) }))}>+</Button><span>{option.requestedQuantity} {option.item.unit}</span></div>{option.item.priceType === "wholesale" && option.item.packageNote.includes("Chưa rõ số lượng tối thiểu") && <p className="pos-price-warning">Chưa xác nhận ngưỡng áp dụng giá sỉ.</p>}<div className="pos-price-card-footer"><span>Tạm tính <b>{formatVnd(option.total)}</b></span><Button type="button" disabled={!option.eligible} onClick={() => addToInvoice(option)}><ShoppingCart size={16}/>{option.eligible ? "Thêm vào báo giá" : option.packageCount === 0 ? "Nhập số gói" : "Chưa đủ điều kiện"}</Button></div></article>) : <div className="pos-no-prices"><Package size={28}/><b>Chưa có giá cho quy cách này</b><span>Có thể kiểm tra ảnh nguồn hoặc cập nhật dữ liệu.</span><Button type="button" onClick={() => setDetailOpen(true)}><Pencil size={15}/> Mở chi tiết sản phẩm</Button></div>}</div><div className="pos-detail-bottom"><Button type="button" onClick={() => setDetailOpen(true)}><ImageIcon size={16}/> Đối chiếu sổ giá</Button>{selectedPrices.some(item => item.status !== "verified") && <span>Giá cần đối chiếu trước khi dùng</span>}</div></div> : <div className="pos-panel pos-selection-empty"><span className="pos-empty-icon"><Package size={28}/></span><p className="pos-eyebrow">CHI TIẾT GIAO DỊCH</p><h2>Chọn một quy cách</h2><p>Chọn sản phẩm ở cột trái để xem các mức giá, nguồn sổ và thêm số lượng vào báo giá.</p><Link href="/questions" className="pos-ask-link"><MessageCircle size={17}/> Hỏi giá bằng câu tự nhiên</Link><div className="pos-step-note"><span>1</span> Tìm mặt hàng <span>2</span> Chọn quy cách <span>3</span> Thêm vào báo giá</div></div>}</section>
+          <aside id="invoice-panel" className="pos-column pos-invoice-column"><div className="pos-panel pos-invoice-panel"><div className="pos-panel-heading"><div><p className="pos-eyebrow">F4 · BÁO GIÁ</p><h2>Báo giá quầy</h2></div><Button type="button" className="pos-icon-action" onClick={() => setInvoiceOpen(true)} aria-label="Mở báo giá đầy đủ"><ShoppingCart size={18}/></Button></div><div className="pos-customer-note"><span className="pos-customer-icon"><Package size={17}/></span><div><b>Báo giá tạm tính</b><small>{activeInvoice.length} mặt hàng · lưu trên thiết bị này</small></div></div><div className="pos-invoice-lines">{activeInvoice.length ? activeInvoice.map((line, index) => <article key={line.key} className="pos-invoice-line"><div className="pos-invoice-line-head"><span className="pos-line-number">{index + 1}</span><b>{line.item.name}</b><Button type="button" aria-label={"Xóa " + line.item.name + " khỏi báo giá"} onClick={() => setInvoice(current => current.filter(item => item.key !== line.key))}><Trash2 size={15}/></Button></div><p>{displaySpecification(line.item.variantSpec)} · {line.requestedQuantity} {line.item.unit}</p><div><span>{line.packageCount} × {formatVnd(line.unitPrice)}</span><b>{formatVnd(line.total)}</b></div></article>) : <div className="pos-invoice-empty"><ShoppingCart size={24}/><span>Chưa có sản phẩm trong báo giá.</span></div>}</div><div className="pos-invoice-total"><span>TỔNG CỘNG</span><strong>{formatVnd(activeInvoice.reduce((sum, line) => sum + line.total, 0))}</strong><small>Giá theo quy cách đã chọn · VND</small></div><Button type="button" className="pos-open-invoice" onClick={() => setInvoiceOpen(true)}><ShoppingCart size={17}/> Xem & sao chép báo giá <kbd>F4</kbd></Button>{invoice.length > 0 && <Button type="button" className="pos-clear-invoice" onClick={() => setInvoice([])}>Xóa toàn bộ báo giá</Button>}<div className="pos-invoice-footnote"><ShieldCheck size={15}/> Giá lấy từ bảng hiện tại; chưa thực hiện thanh toán.</div></div></aside>
         </div>
         <p className="pos-sync-note">{synced ? "Đồng bộ dữ liệu: " + new Date(synced).toLocaleString("vi-VN") : "Đang chờ đồng bộ dữ liệu Supabase"}</p>
+        {syncMessage && <p role="status" className="pos-sync-note">{syncMessage}</p>}
       </main>
       {selected && detailOpen && (
         <div
@@ -669,15 +812,17 @@ export function PriceApp() {
           }}
         >
           <section
+            ref={detailDialogRef}
             role="dialog"
-            aria-modal="true"
+            aria-modal={!catalogEditor}
+            aria-hidden={Boolean(catalogEditor)}
             aria-labelledby="price-dialog-title"
             className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-[var(--card)] p-5 shadow-2xl sm:rounded-3xl sm:p-7"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase text-[var(--green)]">
-                  Chọn giá cho hóa đơn
+                  Chọn giá cho báo giá
                 </p>
                 <h2
                   id="price-dialog-title"
@@ -685,7 +830,7 @@ export function PriceApp() {
                 >
                   {selected.name}
                 </h2>
-                <button
+                <Button
                   type="button"
                   onClick={() => openCatalogEditor(recommended?.item)}
                   className="group mt-0.5 flex items-center gap-1.5 text-left text-[var(--muted)]"
@@ -696,7 +841,7 @@ export function PriceApp() {
                     {displaySpecification(selected.spec)}
                   </b>
                   <Pencil size={13} className="text-[var(--green)]" />
-                </button>
+                </Button>
                 <p className="mt-1 text-sm font-bold text-amber-700">
                   {selectedSourcePages.length > 0
                     ? `Đối chiếu: Trang ${selectedSourcePages.join(", ")}`
@@ -706,7 +851,7 @@ export function PriceApp() {
                   {selectedSourceFiles.length > 0 && (
                     <>
                     {selectedSourceFiles.map((file) => (
-                      <button
+                      <Button
                         key={file}
                         type="button"
                         onClick={() => openSourceImage(file)}
@@ -719,17 +864,17 @@ export function PriceApp() {
                           <ImageIcon size={14} />
                         )}
                         Xem {file.split("/").at(-1)}
-                      </button>
+                      </Button>
                     ))}
                     </>
                   )}
-                  <button
+                  <Button
                     type="button"
                     onClick={() => openCatalogEditor(recommended?.item)}
                     className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-[var(--lime)] px-3 py-1.5 text-xs font-black text-[var(--ink)]"
                   >
                     <Pencil size={14} /> Sửa giá & thông tin
-                  </button>
+                  </Button>
                 </div>
                 {sourceImageError && (
                   <p role="alert" className="mt-2 text-xs font-bold text-red-700">
@@ -737,13 +882,13 @@ export function PriceApp() {
                   </p>
                 )}
               </div>
-              <button
+              <Button
                 onClick={() => setSelected(null)}
                 aria-label="Đóng"
                 className="grid size-10 place-items-center rounded-full bg-[#edf1e8]"
               >
                 <X size={20} />
-              </button>
+              </Button>
             </div>
             <div className="mt-5 grid gap-3">
               {selectedPrices.length === 0 && (
@@ -766,19 +911,20 @@ export function PriceApp() {
                         {displayItemPackageName(option.item)}
                       </p>
                     </div>
-                    <button
+                    <Button
                       onClick={() => setEditing(option.item.id)}
                       className="money flex items-center gap-1 text-xl font-black"
                       aria-label={`Sửa giá ${option.item.name}`}
                     >
                       {formatVnd(option.item.price)} <Pencil size={13} />
-                    </button>
+                    </Button>
                   </div>
                   {editing === option.item.id && (
-                    <input
+                    <TextInput
                       autoFocus
                       defaultValue={option.item.price}
-                      inputMode="numeric"
+                      inputMode="decimal"
+                      aria-label={`Giá mới của ${option.item.name} bằng VND`}
                       onKeyDown={(event) => {
                         if (event.key === "Enter")
                           save(option.item.id, event.currentTarget.value);
@@ -788,7 +934,7 @@ export function PriceApp() {
                     />
                   )}
                   <div className="mt-3 flex items-center gap-2">
-                    <button
+                    <Button
                       type="button"
                       onClick={() =>
                         setPackageCounts((current) => ({
@@ -802,8 +948,8 @@ export function PriceApp() {
                       className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#edf1e8] text-xl font-black text-[var(--green)]"
                     >
                       âˆ’
-                    </button>
-                    <input
+                    </Button>
+                    <TextInput
                       value={packageCounts[option.item.priceId] ?? "0"}
                       onChange={(event) =>
                         setPackageCounts((current) => ({
@@ -815,7 +961,7 @@ export function PriceApp() {
                       aria-label={`Số lượng ${displayItemPackageName(option.item)}`}
                       className="h-11 min-w-0 flex-1 rounded-xl border-2 border-[var(--green)] bg-white text-center text-xl font-black"
                     />
-                    <button
+                    <Button
                       type="button"
                       onClick={() =>
                         setPackageCounts((current) => ({
@@ -827,7 +973,7 @@ export function PriceApp() {
                       className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--green)] text-xl font-black text-white"
                     >
                       +
-                    </button>
+                    </Button>
                   </div>
                   <p className="mt-1 text-center text-xs text-[var(--muted)]">
                     {option.packageCount} × {option.item.packageQuantity} ={" "}
@@ -842,15 +988,15 @@ export function PriceApp() {
                     )}
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--line)] pt-3">
                     <p className="money text-2xl font-black">{formatVnd(option.total)}</p>
-                    <button
+                    <Button
                       onClick={() => addToInvoice(option)}
                       disabled={!option.eligible}
                       className="rounded-xl bg-[var(--green)] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-400"
                     >
                       {option.eligible
-                        ? "Thêm vào hóa đơn"
+                        ? "Thêm vào báo giá"
                         : "Nhập số lượng"}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -861,6 +1007,7 @@ export function PriceApp() {
       {catalogEditor && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4">
           <section
+            ref={catalogDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="catalog-editor-title"
@@ -875,14 +1022,14 @@ export function PriceApp() {
                   Sửa giá & thông tin
                 </h2>
               </div>
-              <button
+              <Button
                 type="button"
                 onClick={() => setCatalogEditor(null)}
                 aria-label="Đóng trình sửa"
                 className="grid size-10 place-items-center rounded-full bg-[#edf1e8]"
               >
                 <X size={20} />
-              </button>
+              </Button>
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               {[
@@ -893,7 +1040,7 @@ export function PriceApp() {
               ].map(([label, field]) => (
                 <label key={field} className="text-sm font-bold">
                   {label}
-                  <input
+                  <TextInput
                     value={catalogEditor[field as keyof CatalogEditor] as string}
                     onChange={(event) =>
                       setCatalogEditor((current) =>
@@ -915,7 +1062,7 @@ export function PriceApp() {
                 <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <label className="text-sm font-bold">
                     Tên đóng gói
-                    <input
+                    <TextInput
                       value={catalogEditor.packageName}
                       onChange={(event) =>
                         setCatalogEditor((current) =>
@@ -929,7 +1076,7 @@ export function PriceApp() {
                   </label>
                   <label className="text-sm font-bold">
                     Số lượng đóng gói
-                    <input
+                    <TextInput
                       value={catalogEditor.packageQuantity}
                       onChange={(event) =>
                         setCatalogEditor((current) =>
@@ -944,7 +1091,7 @@ export function PriceApp() {
                   </label>
                   <label className="text-sm font-bold">
                     Đơn vị tính
-                    <input
+                    <TextInput
                       value={catalogEditor.baseUnit}
                       onChange={(event) =>
                         setCatalogEditor((current) =>
@@ -958,7 +1105,7 @@ export function PriceApp() {
                   </label>
                   <label className="text-sm font-bold">
                     Loại giá
-                    <select
+                    <Select
                       value={catalogEditor.priceType}
                       onChange={(event) =>
                         setCatalogEditor((current) =>
@@ -972,11 +1119,11 @@ export function PriceApp() {
                       <option value="retail">Giá lẻ</option>
                       <option value="wholesale">Giá sỉ</option>
                       <option value="dealer">Giá đại lý</option>
-                    </select>
+                    </Select>
                   </label>
                   <label className="text-sm font-bold">
                     Số lượng tối thiểu
-                    <input
+                    <TextInput
                       value={catalogEditor.minimumQuantity}
                       onChange={(event) =>
                         setCatalogEditor((current) =>
@@ -991,18 +1138,20 @@ export function PriceApp() {
                   </label>
                   <label className="text-sm font-bold">
                     Giá bán (VND)
-                    <input
+                    <TextInput
                       value={catalogEditor.amount}
                       onChange={(event) =>
                         setCatalogEditor((current) =>
                           current
-                            ? { ...current, amount: event.target.value.replace(/\D/g, "") }
+                            ? { ...current, amount: event.target.value }
                             : current,
                         )
                       }
-                      inputMode="numeric"
+                      inputMode="decimal"
+                      aria-describedby="catalog-price-help"
                       className="money mt-1 h-11 w-full rounded-xl border-2 border-[var(--green)] bg-white px-3 font-black"
                     />
+                    <span id="catalog-price-help" className="mt-1 block text-xs font-normal text-[var(--muted)]">Dùng dấu phẩy hoặc dấu chấm cho tối đa 2 chữ số lẻ.</span>
                   </label>
                 </div>
               </>
@@ -1019,21 +1168,21 @@ export function PriceApp() {
               </p>
             )}
             <div className="mt-6 flex justify-end gap-3">
-              <button
+              <Button
                 type="button"
                 onClick={() => setCatalogEditor(null)}
                 className="rounded-xl border border-[var(--line)] px-5 py-2.5 font-bold"
               >
                 Hủy
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={saveCatalogEditor}
                 disabled={savingCatalog}
                 className="rounded-xl bg-[var(--green)] px-5 py-2.5 font-bold text-white disabled:opacity-60"
               >
                 {savingCatalog ? "Đang lưu…" : "Lưu tất cả thay đổi"}
-              </button>
+              </Button>
             </div>
           </section>
         </div>
@@ -1046,6 +1195,7 @@ export function PriceApp() {
           }}
         >
           <aside
+            ref={invoiceDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="invoice-title"
@@ -1054,28 +1204,32 @@ export function PriceApp() {
             <div className="flex items-start justify-between border-b border-[var(--line)] p-5">
               <div>
                 <p className="text-xs font-bold uppercase text-[var(--green)]">
-                  Hóa đơn tạm tính
+                  Báo giá tạm tính
                 </p>
                 <h2 id="invoice-title" className="text-2xl font-black">
                   {activeInvoice.length} sản phẩm
                 </h2>
               </div>
-              <button
+              <Button
                 onClick={() => setInvoiceOpen(false)}
-                aria-label="Đóng hóa đơn"
+                aria-label="Đóng báo giá"
                 className="grid size-10 place-items-center rounded-full bg-[#edf1e8]"
               >
                 <X />
-              </button>
+              </Button>
             </div>
             <div className="flex-1 overflow-y-auto p-5">
-              {!loading && activeInvoice.length < invoice.length && <p role="alert" className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Một số mức giá đã hết hiệu lực hoặc không còn trong bảng giá hiện tại; chúng không được đưa vào báo giá. Hãy chọn lại sản phẩm.</p>}
+              {!loading && activeInvoice.length < invoice.length && <p role="alert" className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Một số mức giá chưa được duyệt hoặc không còn hiệu lực; chúng không được đưa vào báo giá. Hãy chọn lại mức giá đã duyệt.</p>}
+              {!loading && activeInvoice.some((line) => line.priceChanged) && <div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><p>Giá hoặc bao bì đã đổi kể từ lúc thêm vào báo giá. Đơn giá hiện tại được hiển thị bên dưới; hãy xem lại và xác nhận trước khi sao chép báo giá.</p><Button type="button" className="mt-2 rounded-lg bg-amber-900 px-3 py-2 font-bold text-white" onClick={() => setInvoice((current) => current.map((saved) => {
+                const latest = activeInvoice.find((line) => line.key === saved.key);
+                return latest?.priceChanged ? { ...saved, item: latest.item, unitPrice: latest.item.price, total: latest.packageCount * latest.item.price, requestedQuantity: latest.packageCount * latest.item.packageQuantity } : saved;
+              }))}>Xác nhận giá hiện tại cho {activeInvoice.filter((line) => line.priceChanged).length} dòng</Button></div>}
               {activeInvoice.length === 0 ? (
                 <div className="py-16 text-center">
                   <ShoppingCart className="mx-auto mb-3" />
-                  <b>Hóa đơn đang trống</b>
+                  <b>Báo giá đang trống</b>
                   <p className="mt-1 text-sm text-[var(--muted)]">
-                    Tìm sản phẩm và chọn “Thêm vào hóa đơn”.
+                    Tìm sản phẩm và chọn “Thêm vào báo giá”.
                   </p>
                 </div>
               ) : (
@@ -1098,7 +1252,7 @@ export function PriceApp() {
                           <td className="px-3 py-3">
                             <b>{displaySpecification(line.item.variantSpec)}</b>
                             <p className="mt-0.5 whitespace-nowrap text-xs text-[var(--muted)]">
-                              {line.item.priceType === "wholesale"
+                              {priceTierLabel(line.item.priceType)} · {line.item.priceType === "wholesale"
                                 ? `${line.packageCount} bịch × ${line.item.packageQuantity} ${line.item.unit}`
                                 : `${line.packageCount} ${displayItemPackageName(line.item)}`}
                             </p>
@@ -1116,17 +1270,17 @@ export function PriceApp() {
                             {formatVnd(line.total)}
                           </td>
                           <td className="px-2 py-3 text-center">
-                            <button
+                            <Button
                               onClick={() =>
                                 setInvoice((current) =>
                                   current.filter((item) => item.key !== line.key),
                                 )
                               }
-                              aria-label={`Xóa ${line.item.name} khỏi hóa đơn`}
+                              aria-label={`Xóa ${line.item.name} khỏi báo giá`}
                               className="text-red-600"
                             >
                               <Trash2 size={17} />
-                            </button>
+                            </Button>
                           </td>
                         </tr>
                       ))}
@@ -1145,8 +1299,8 @@ export function PriceApp() {
                 </strong>
               </div>
               {quoteMessage && <p role="status" className="mb-3 rounded-lg bg-[#e9eee8] p-3 text-sm text-[var(--green)]">{quoteMessage}</p>}
-              <button type="button" onClick={copyQuote} disabled={activeInvoice.length === 0} className="mb-2 h-12 w-full rounded-xl bg-[var(--lime)] font-bold text-[var(--ink)] disabled:opacity-50">Sao chép báo giá</button>
-              <button
+              <Button type="button" onClick={copyQuote} disabled={activeInvoice.length === 0 || activeInvoice.length !== invoice.length || activeInvoice.some((line) => line.priceChanged)} className="mb-2 h-12 w-full rounded-xl bg-[var(--lime)] font-bold text-[var(--ink)] disabled:opacity-50">Sao chép báo giá</Button>
+              <Button
                 onClick={() => {
                   setInvoiceOpen(false);
                   setQuery("");
@@ -1163,23 +1317,25 @@ export function PriceApp() {
                 className="h-12 w-full rounded-xl bg-[var(--green)] font-bold text-white"
               >
                 Thêm sản phẩm khác
-              </button>
+              </Button>
               {activeInvoice.length > 0 && (
-                <button
+                <Button
                   onClick={() => setInvoice([])}
                   className="mt-2 h-10 w-full text-sm font-bold text-red-700"
                 >
-                  Xóa hóa đơn
-                </button>
+                  Xóa báo giá
+                </Button>
               )}
             </footer>
           </aside>
         </div>
       )}
+      {customerOrdersOpen && <CustomerOrderInbox onClose={() => setCustomerOrdersOpen(false)} />}
       <nav className="mobile-nav sm:hidden" aria-label="Điều hướng chính">
-        <Link href="/" className="active" aria-current="page"><Home size={20} />Tra giá</Link>
+        <Link href="/staff" className="active" aria-current="page"><Home size={20} />Tra giá</Link>
         <a href="/questions"><Search size={20} />Hỏi giá</a>
-        <button type="button" onClick={() => setInvoiceOpen(true)}><ShoppingCart size={20} />Hóa đơn {activeInvoice.length > 0 ? `(${activeInvoice.length})` : ""}</button>
+        <Button type="button" onClick={() => setCustomerOrdersOpen(true)}><ClipboardList size={20} />Đơn khách</Button>
+        <Button type="button" onClick={() => setInvoiceOpen(true)}><ShoppingCart size={20} />Báo giá {activeInvoice.length > 0 ? `(${activeInvoice.length})` : ""}</Button>
       </nav>
    </div>
   );

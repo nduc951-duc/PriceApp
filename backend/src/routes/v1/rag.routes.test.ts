@@ -5,7 +5,6 @@ import type { SupabaseFactory } from "../../repositories/supabase-client.js";
 const env = { supabaseUrl: "https://project.supabase.co", supabasePublishableKey: "public-key", allowedOrigins: ["https://shop.example"], port: 3001 };
 const token = () => `header.${Buffer.from(JSON.stringify({ iss: `${env.supabaseUrl}/auth/v1`, exp: Math.floor(Date.now() / 1000) + 600 })).toString("base64url")}.signature`;
 const adminEndpoints = [
-  { method: "GET", url: "/api/v1/admin/rag/pages" }, { method: "PUT", url: "/api/v1/admin/rag/pages" },
   { method: "GET", url: "/api/v1/admin/rag/index" }, { method: "POST", url: "/api/v1/admin/rag/index" },
   { method: "GET", url: "/api/v1/admin/rag/health" },
 ] as const;
@@ -47,6 +46,36 @@ describe("versioned RAG route boundaries", () => {
       const response = await app.inject({ method: "POST", url: "/api/v1/rag/query", headers: { authorization: `Bearer ${token()}` }, payload });
       expect(response.statusCode).toBe(400);
       expect(response.json()).toMatchObject({ error: { code: "INVALID_INPUT" } });
+      expect(dataAccess).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+
+  it("rejects unsupported OCR image types before calling the model", async () => {
+    const { app, dataAccess } = fixture("viewer");
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/v1/admin/rag/ocr", headers: { authorization: `Bearer ${token()}` }, payload: { imageBase64: "QUJDREVGR0hJSktMTU4=", mimeType: "image/gif" } });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: { code: "INVALID_INPUT" } });
+      expect(dataAccess).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+
+  it("allows a signed-in viewer to preview OCR text as chunks", async () => {
+    const { app } = fixture("viewer");
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/v1/admin/rag/preview", headers: { authorization: `Bearer ${token()}` }, payload: { extractedText: "Tắc kê sắt:\n6 x 50 | 12" } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().chunks).toHaveLength(1);
+    } finally { await app.close(); }
+  });
+
+  it("asks for one price tier before running retrieval when the question conflicts", async () => {
+    const { app, dataAccess } = fixture();
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/v1/rag/query", headers: { authorization: `Bearer ${token()}` }, payload: { question: "giá sỉ hay giá lẻ tắc kê" } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ status: "clarify", items: [], sources: [] });
+      expect(response.json().answer).toContain("Vui lòng chọn một loại giá");
       expect(dataAccess).not.toHaveBeenCalled();
     } finally { await app.close(); }
   });

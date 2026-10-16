@@ -1,4 +1,4 @@
-const formatVnd = (amount: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(amount);
+const formatVnd = (amount: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 2 }).format(amount);
 
 type Price = { amount: number; priceType: string; packagingName: string; minimumQuantity: number; packageNote?: string };
 type Item = { productName: string; variant: string; sourcePages: number[]; prices: Price[] };

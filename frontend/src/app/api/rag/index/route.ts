@@ -1,19 +1,19 @@
 import { createHash } from "node:crypto";
 import { authenticateRagRequest } from "@/lib/rag/auth";
-import { CHUNKER_VERSION, chunkText } from "@/lib/rag/chunking";
+import { CHUNKER_VERSION, chunkRecords, chunkText, DEFAULT_CHUNK_SETTINGS, type RagChunkSettings } from "@/lib/rag/chunking";
 import { ragJson } from "@/lib/rag/http";
 import { EMBEDDING_DIMENSIONS, embedTexts, embeddingModel, embeddingFingerprint } from "@/lib/rag/provider";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-type PageText = { source_page_id: number; title: string; extracted_text: string; revision: number; source_pages: { page_number: number | null; verification_status: string } | null };
+type PageText = { source_page_id: number; title: string; extracted_text: string; revision: number; chunk_settings: RagChunkSettings; chunk_links: Record<string, number>; source_pages: { page_number: number | null; verification_status: string } | null };
 type Variant = {
   id: number; display_name: string; raw_specification: string | null; search_text: string; attributes: Record<string, unknown>;
   products: { name: string; categories: { name: string } | null; product_aliases: { alias: string }[] | null } | null;
   variant_sources: { source_page_id: number; source_pages: { page_number: number | null; verification_status: string } | null }[];
 };
-type DraftChunk = { chunk_key: string; source_page_id: number; source_revision: number | null; product_variant_id: number | null; chunk_index: number; content: string; content_hash: string; metadata: Record<string, unknown> };
+type DraftChunk = { chunk_key: string; source_page_id: number; source_revision: number | null; product_variant_id: number | null; chunk_index: number; chunker_version: string; source_start: number | null; source_end: number | null; content: string; content_hash: string; metadata: Record<string, unknown> };
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const BATCH_SIZE = 16;
 async function allRows(query: (start: number, end: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>) {
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   if (!auth.ok) return ragJson({ error: auth.error }, { status: auth.status });
   try {
     const [pageData, rejectedData, variantData] = await Promise.all([
-      allRows((start, end) => auth.client.from("rag_page_texts").select("source_page_id,title,extracted_text,revision,source_pages!inner(page_number,verification_status)").eq("review_status", "approved").order("source_page_id").range(start, end)),
+      allRows((start, end) => auth.client.from("rag_page_texts").select("source_page_id,title,extracted_text,revision,chunk_settings,chunk_links,source_pages!inner(page_number,verification_status)").eq("review_status", "approved").order("source_page_id").range(start, end)),
       allRows((start, end) => auth.client.from("rag_page_texts").select("source_page_id").eq("review_status", "rejected").order("source_page_id").range(start, end)),
       allRows((start, end) => auth.client.from("product_variants").select("id,display_name,raw_specification,search_text,attributes,products!inner(name,categories(name),product_aliases(alias)),variant_sources(source_page_id,source_pages(page_number,verification_status))").eq("active", true).eq("verification_status", "verified").order("id").range(start, end)),
     ]);
@@ -63,12 +63,14 @@ export async function POST(request: Request) {
 
     for (const page of pages) {
       const pageNumber = page.source_pages?.page_number ?? null;
-      for (const chunk of chunkText(page.extracted_text)) {
-        const content = `${page.title || `Sổ giá - Trang ${pageNumber ?? "?"}`}\n${chunk.content}`;
+      const settings = page.chunk_settings ?? DEFAULT_CHUNK_SETTINGS;
+      for (const chunk of chunkRecords(page.extracted_text, settings)) {
+        const content = [page.title || `Sổ giá - Trang ${pageNumber ?? "?"}`, chunk.heading ? `Nhóm: ${chunk.heading}` : "", chunk.content].filter(Boolean).join("\n");
+        const variantId = page.chunk_links?.[`${chunk.start}:${chunk.end}`] ?? null;
         drafts.push({
           chunk_key: `page:${page.source_page_id}:ocr:${chunk.index}`, source_page_id: page.source_page_id, source_revision: page.revision,
-          product_variant_id: null, chunk_index: chunk.index, content, content_hash: hash(content),
-          metadata: { kind: "approved_page_ocr", page_number: pageNumber, title: page.title, start_char: chunk.start, end_char: chunk.end },
+          product_variant_id: variantId, chunk_index: chunk.index, chunker_version: CHUNKER_VERSION, source_start: chunk.start, source_end: chunk.end, content, content_hash: hash(content),
+          metadata: { kind: "approved_page_ocr", page_number: pageNumber, title: page.title, heading: chunk.heading, source_text: chunk.content, start_char: chunk.start, end_char: chunk.end },
         });
       }
     }
@@ -93,7 +95,7 @@ export async function POST(request: Request) {
           drafts.push({
             chunk_key: `page:${source.source_page_id}:variant:${variant.id}:${chunk.index}`,
             source_page_id: source.source_page_id, source_revision: null, product_variant_id: variant.id, chunk_index: chunk.index,
-            content, content_hash: hash(content),
+            chunker_version: CHUNKER_VERSION, source_start: null, source_end: null, content, content_hash: hash(content),
             metadata: { kind: "verified_catalog", page_number: source.source_pages?.page_number ?? null, product_name: product.name, variant_name: variant.display_name, start_char: chunk.start, end_char: chunk.end },
           });
         }

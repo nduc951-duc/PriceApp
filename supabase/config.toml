@@ -5,3 +5,7 @@ enabled = true
 major_version = 17
 [storage]
 enabled = true
+
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/rag_worker_access_token_hook"

@@ -3,6 +3,7 @@ export const EMBEDDING_DIMENSIONS = 1024;
 type OpenAIEmbeddingResponse = { data?: Array<{ index?: number; embedding?: unknown }> };
 type OllamaEmbeddingResponse = { embeddings?: unknown };
 type ChatResponse = { choices?: Array<{ message?: { content?: unknown } }> };
+type OllamaChatResponse = { message?: { content?: unknown } };
 function provider() { return process.env.RAG_AI_PROVIDER?.trim().toLowerCase() || "ollama"; }
 function baseUrl() {
   const value = process.env.RAG_AI_BASE_URL?.trim();
@@ -21,6 +22,7 @@ function model(env: string) {
   if (!value) throw new Error(`${env} chưa được cấu hình.`);
   return value;
 }
+function ollamaKeepAlive() { return process.env.RAG_OLLAMA_KEEP_ALIVE?.trim() || "15m"; }
 async function readError(response: Response) {
   return `AI provider trả lỗi HTTP ${response.status}`;
 }
@@ -84,7 +86,7 @@ export async function embedTexts(input: string[]): Promise<number[][]> {
   if (!input.length) return [];
   if (provider() === "ollama") {
     const response = await providerFetch(`${ollamaRoot()}/api/embed`, {
-      method: "POST", headers: headers(), body: JSON.stringify({ model: embeddingModel(), input }),
+      method: "POST", headers: headers(), body: JSON.stringify({ model: embeddingModel(), input, keep_alive: ollamaKeepAlive() }),
       signal: AbortSignal.timeout(60_000),
     });
     if (!response.ok) throw new Error(await readError(response));
@@ -109,11 +111,15 @@ export async function generateGroundedAnswer(input: {
   const evidence = input.evidence.map((item, index) => ({
     id: index + 1, page: item.page, content: item.content, current_prices_from_sql: item.prices ?? [],
   }));
-  const endpoint = provider() === "ollama" ? `${ollamaRoot()}/v1/chat/completions` : `${baseUrl()}/chat/completions`;
+  const useOllama = provider() === "ollama";
+  const endpoint = useOllama ? `${ollamaRoot()}/api/chat` : `${baseUrl()}/chat/completions`;
   const response = await providerFetch(endpoint, {
     method: "POST", headers: headers(),
     body: JSON.stringify({
-      model: selectedChatModel, temperature: 0.1,
+      model: selectedChatModel,
+      ...(useOllama
+        ? { keep_alive: ollamaKeepAlive(), stream: false, options: { temperature: 0.1 } }
+        : { temperature: 0.1 }),
       messages: [
         { role: "system", content: "Bạn là trợ lý tra cứu giá vật tư bằng tiếng Việt. Chỉ dùng bằng chứng được cung cấp. Giá trong current_prices_from_sql là dữ liệu chuẩn; không tự tính, sửa, nội suy hoặc bịa giá. Nếu không có giá phù hợp, nói rõ chưa có dữ liệu. Phân biệt giá đã xác minh và giá cần đối chiếu. Không tự tạo số trang; chỉ trích dẫn [Trang N] khi N có trong page. Trả lời ngắn gọn, nêu quy cách, loại giá, đơn vị/số lượng tối thiểu nếu có." },
         { role: "user", content: JSON.stringify({ question: input.question, evidence }) },
@@ -122,8 +128,8 @@ export async function generateGroundedAnswer(input: {
     signal: AbortSignal.timeout(60_000),
   });
   if (!response.ok) throw new Error(await readError(response));
-  const body = await response.json() as ChatResponse;
-  const content = body.choices?.[0]?.message?.content;
+  const body = await response.json() as ChatResponse & OllamaChatResponse;
+  const content = useOllama ? body.message?.content : body.choices?.[0]?.message?.content;
   if (typeof content !== "string" || !content.trim()) throw new Error("LLM không trả về nội dung câu trả lời.");
   return content.trim();
 }

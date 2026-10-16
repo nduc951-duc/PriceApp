@@ -4,7 +4,7 @@
 
 | Thông tin | Nội dung |
 | :--- | :--- |
-| Ngày rà soát | **05/10/2026** |
+| Ngày rà soát | **10/10/2026** |
 | Dữ liệu ban đầu | **13 trang** sổ giá |
 | Tài liệu | Đánh giá kỹ thuật · User stories · Backlog triển khai |
 | Tiến độ task | **3/45** đã đánh dấu hoàn thành |
@@ -40,13 +40,13 @@
 | [**L0**](#l0) | Sửa chữ tiếng Việt | US-00 | 3/4 | Đã sửa · chờ kiểm tra UI |
 | [**L1**](#l1) | Chạy được một luồng RAG thật | US-01 | 0/4 | Owner đã khởi tạo; thiếu nguồn duyệt, phiên UI và kiểm thử thật |
 | [**L2**](#l2) | Thu hồi tài liệu và quyền truy cập đúng | US-02, US-03 | 0/4 | Code có; thiếu integration owner/viewer |
-| [**L3**](#l3) | Quản trị 13 trang và xem trước chunk | US-04, US-05 | 0/5 | Đã bổ sung ảnh cạnh bản chép, cảnh báo mất thay đổi, preview chunk và offset chuẩn hóa; còn report/trạng thái từng trang, chunk theo record và gắn variant |
+| [**L3**](#l3) | Quản trị 13 trang và xem trước chunk | US-04, US-05 | 0/5 | Đã triển khai report, record preview, cấu hình chunk và liên kết variant; migration đã áp dụng, còn kiểm tra UI/mapping với corpus thật ([trạng thái](RAG_L3_STATUS.md)) |
 | [**L4**](#l4) | Lập chỉ mục ổn định và tiết kiệm | US-06 | 0/5 | Migration đã đồng bộ; thiếu corpus đã duyệt và kiểm thử index thật |
-| [**L5**](#l5) | Tìm đúng quy cách và bao bì | US-07, US-08 | 0/5 | Đã thêm RRF; thiếu test set và benchmark |
-| [**L6**](#l6) | Trả lời có dẫn chứng và giá kiểm tra được | US-09, US-10 | 0/5 | Đã thêm trả lời giá bằng code; thiếu nghiệm thu citation và biên |
-| [**L7**](#l7) | Hỏi tiếp và đưa sang hóa đơn | US-11, US-12 | 0/4 | Đã có đường mở variant từ kết quả RAG; thiếu hội thoại/session và E2E |
-| [**L8**](#l8) | Đánh giá và vòng phản hồi | US-13, US-14 | 0/5 | Chưa triển khai |
-| [**L9**](#l9) | Hoàn thiện bản bảo vệ | US-15 | 0/4 | Chưa triển khai |
+| [**L5**](#l5) | Tìm đúng quy cách và bao bì | US-07, US-08 | 0/5 | Đã thêm parser/filter thuộc tính rõ ràng và hỏi lại khi xung đột loại giá; thiếu 80–100 câu đã duyệt, debug retrieval và benchmark |
+| [**L6**](#l6) | Trả lời có dẫn chứng và giá kiểm tra được | US-09, US-10 | 0/5 | Đã thêm trạng thái trả lời, ID/phiên bản SQL và citation chunk/revision/span; migration provenance đã áp, RPC remote đã xác minh; còn nghiệm thu giá/OCR và E2E |
+| [**L7**](#l7) | Hỏi tiếp và đưa sang hóa đơn | US-11, US-12 | 0/4 | Đã thêm conversation RLS/API, follow-up theo tên mặt hàng và kiểm tra lại giá trước khi thêm/sao chép; migration đã áp, FORCE RLS đã xác minh; còn E2E qua phiên thật |
+| [**L8**](#l8) | Đánh giá và vòng phản hồi | US-13, US-14 | 0/5 | Đã thêm metric, chia nhóm tune/test, runner, phản hồi theo nhóm lỗi, tổng hợp và CSV; thiếu corpus adjudicated và baseline đo thật |
+| [**L9**](#l9) | Hoàn thiện bản bảo vệ | US-15 | 0/4 | Đã cập nhật setup/runbook và hướng dẫn đánh giá; thiếu demo owner/nhân viên, video/slide và nghiệm thu môi trường thật |
 
 **Quy ước:** `[x]` đã kiểm chứng · `[ ]` chưa hoàn thành. Tiến độ trên được tổng hợp từ checklist bên dưới.
 
@@ -119,7 +119,7 @@ Xem thêm [bằng chứng L1–L2](RAG_L1_L2_STATUS.md) và [bằng chứng L4](
 
 - Có schema catalog, bao bì, mức giá, nguồn và lịch sử sửa giá; UI tra cứu, sửa giá, giỏ hàng/hóa đơn tạm lưu trên thiết bị.
 - Có code cho bản chép được duyệt, chunking, pgvector 1.024 chiều, embedding provider, tái sử dụng hash và API kết hợp truy xuất với LLM.
-- Trong phiên rà soát, `.env.local` chưa có các biến RAG provider/base URL/embedding/chat model; Ollama CLI không được tìm thấy trên PATH. Chưa xác nhận việc áp migration trên cloud hay một lần truy xuất/generation thật.
+- Các migration hiện đã được áp dụng và đối chiếu remote. Chưa chạy indexing/generation trên corpus được cửa hàng duyệt; Ollama đã được xác nhận ở lần rà soát trước, nhưng chưa có benchmark RAG trên dữ liệu cửa hàng.
 - Đã sửa chuỗi UTF-8 bị đọc sai thành Windows-1252 trong `src/components/rag-admin.tsx` và dữ liệu tiếng Việt của `src/lib/rag/chunking.test.ts`. Đây là sửa nội dung file, không phải đổi font để che lỗi.
 - Lint không có lỗi (còn cảnh báo font cũ), typecheck, 15 unit tests và production build qua sau sửa. Browser không có kết nối khả dụng, chưa kiểm tra hình ảnh/render sau đăng nhập.
 - Các chức năng bên dưới là backlog, chưa được triển khai trong lượt đánh giá này.

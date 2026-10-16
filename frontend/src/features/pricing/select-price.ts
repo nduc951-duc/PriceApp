@@ -5,6 +5,7 @@ export type PricedPackage = {
   priceType: string;
   packageNote: string;
   unit: string;
+  status: "verified" | "needs_review" | "unreadable";
 };
 
 export function selectBestPrice<T extends PricedPackage>(
@@ -16,7 +17,8 @@ export function selectBestPrice<T extends PricedPackage>(
       !Number.isFinite(smallestPackageQuantity) || smallestPackageQuantity <= 0) return null;
   const baseQuantity = smallestPackageCount * smallestPackageQuantity;
   const candidates = rows.flatMap((item) => {
-    if (!Number.isFinite(item.packageQuantity) || item.packageQuantity <= 0 ||
+    if (item.status !== "verified" ||
+        !Number.isFinite(item.packageQuantity) || item.packageQuantity <= 0 ||
         !Number.isFinite(item.price) || item.price < 0 ||
         (item.priceType === "wholesale" && item.packageNote.includes("Chưa rõ số lượng tối thiểu"))) return [];
     const packageCount = baseQuantity / item.packageQuantity;

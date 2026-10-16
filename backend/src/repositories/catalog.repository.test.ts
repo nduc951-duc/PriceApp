@@ -6,8 +6,8 @@ const row = (overrides: Record<string, unknown> = {}) => ({
   products: { id: 2, name: "Product", categories: { id: 3, name: "Category" } },
   variant_sources: [{ source_pages: { page_number: 4, storage_path: "source-pages/four.jpg" } }, { source_pages: null }],
   packaging_options: [{ id: 8, name: "Box", quantity: "10", base_unit: "piece", note: null,
-    prices: [{ id: 9, amount: "12345.50", version: 2, price_type: "retail", minimum_quantity: "1", active: true, price_lists: { suppliers: { name: "Vendor" } } },
-      { id: 10, amount: "1", version: 1, price_type: "retail", minimum_quantity: "1", active: false, price_lists: null }] }],
+    prices: [{ id: 9, amount: "12345.50", version: 2, price_type: "retail", minimum_quantity: "1", active: true, valid_from: "2020-01-01T00:00:00.000Z", valid_to: null, price_lists: { suppliers: { name: "Vendor" } } },
+      { id: 10, amount: "1", version: 1, price_type: "retail", minimum_quantity: "1", active: false, valid_from: "2020-01-01T00:00:00.000Z", valid_to: null, price_lists: null }] }],
   ...overrides,
 });
 
@@ -30,18 +30,37 @@ describe("catalog mapping", () => {
     expect(mapped.prices.map(price => price.id)).toEqual([9]);
     expect(mapped.entries[0].sourceFiles).toEqual(["source-pages/four.jpg"]);
   });
+  it("omits prices that have not started or have expired", () => {
+    const packaging = row().packaging_options[0];
+    const current = packaging.prices[0];
+    const prices = [
+      { ...current, id: 20, valid_from: "2026-10-16T00:00:00.000Z" },
+      { ...current, id: 21, valid_to: "2026-10-14T23:59:59.999Z" },
+      { ...current, id: 22, valid_to: "not-a-date" },
+      { ...current, id: 23, valid_to: "2026-10-15T00:00:00.000Z" },
+    ];
+    const mapped = mapCatalogRows([
+      row({ packaging_options: [{ ...packaging, prices }] }),
+    ], Date.parse("2026-10-15T00:00:00.000Z"));
+    expect(mapped.prices.map((price) => price.priceId)).toEqual([23]);
+  });
 });
 
-it("limits catalog reads to the current 1000 rows through caller client", async () => {
-  const limit = vi.fn().mockResolvedValue({ data: Array.from({ length: 1000 }, (_, id) => row({ id, packaging_options: [] })), error: null });
-  const neq = vi.fn(() => ({ limit }));
+it("reads every catalog page in stable ID order through the caller client", async () => {
+  const batches = [500, 500, 200].map((count, page) =>
+    Array.from({ length: count }, (_, index) => row({ id: page * 500 + index + 1, packaging_options: [] })),
+  );
+  const range = vi.fn(async (start: number) => ({ data: batches[start / 500] ?? [], error: null }));
+  const order = vi.fn(() => ({ range }));
+  const neq = vi.fn(() => ({ order }));
   const eq = vi.fn(() => ({ neq }));
   const select = vi.fn(() => ({ eq }));
   const from = vi.fn(() => ({ select }));
   const result = await readCatalog({ from } as never);
-  expect(result.entries).toHaveLength(1000);
+  expect(result.entries).toHaveLength(1200);
   expect(from).toHaveBeenCalledWith("product_variants");
   expect(eq).toHaveBeenCalledWith("active", true);
   expect(neq).toHaveBeenCalledWith("verification_status", "sample");
-  expect(limit).toHaveBeenCalledWith(1000);
+  expect(order).toHaveBeenCalledWith("id", { ascending: true });
+  expect(range.mock.calls.map(([start, end]) => [start, end])).toEqual([[0, 499], [500, 999], [1000, 1499]]);
 });

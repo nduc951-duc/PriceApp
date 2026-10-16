@@ -8,6 +8,8 @@ import { ApiError } from "./errors.js";
 declare module "fastify" {
   interface FastifyRequest { auth?: AuthContext }
   interface FastifyInstance {
+    publicSupabaseFactory: SupabaseFactory;
+    customerOrderHmacSecret?: string;
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<AuthContext>;
     requireRole: (...roles: import("../services/auth.service.js").AppRole[]) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }

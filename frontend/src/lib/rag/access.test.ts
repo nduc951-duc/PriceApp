@@ -64,7 +64,7 @@ describe("RAG access and source cleanup", () => {
     };
     const from = vi.fn((table: string) => ({ select: () => chain(table === "rag_chunks" ? [{ chunk_key: "old" }] : []) }));
     const rpc = vi.fn(async (name: string) => ({ data: name === "rag_start_index_run"
-      ? { id: 4, corpus_hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", fingerprint: "lines-1100-overlap160-v2:ollama:bge-m3:digest:1024", checkpoint: 0, total_chunks: 0, changed: 0, reused: 0 }
+      ? { id: 4, corpus_hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", fingerprint: "records-1100-overlap160-v3:ollama:bge-m3:digest:1024", checkpoint: 0, total_chunks: 0, changed: 0, reused: 0 }
       : { id: 4, changed: 0, reused: 0, removed: 1 }, error: null }));
     mocks.authenticate.mockResolvedValueOnce({ ok: true, client: { from, rpc } });
     const response = await buildIndex(request("POST"));
@@ -75,11 +75,11 @@ describe("RAG access and source cleanup", () => {
 });
 
 describe("service worker session isolation", () => {
-  it("evicts older caches and never intercepts authenticated API or document requests", async () => {
+  it("evicts old caches, stores only the generic POS shell, and excludes user-specific routes", async () => {
     const listeners: Record<string, (event: { request: Request; waitUntil: (work: Promise<unknown>) => void; respondWith: (work: Promise<unknown>) => void }) => void> = {};
     const deleted: string[] = [];
     const stored: string[] = [];
-    const cache = { addAll: async () => undefined, match: async () => undefined, put: async (request: Request) => { stored.push(request.url); } };
+    const cache = { addAll: async () => undefined, match: async () => undefined, put: async (request: Request | string) => { stored.push(typeof request === "string" ? request : request.url); } };
     const worker = readFileSync(new URL("../../../public/sw.js", import.meta.url), "utf8");
     runInNewContext(worker, {
       URL, fetch: async () => ({ ok: true, type: "basic", clone() { return this; } }),
@@ -89,13 +89,22 @@ describe("service worker session isolation", () => {
     let activation: Promise<unknown> = Promise.resolve();
     listeners.activate!({ request: request("GET"), waitUntil: (work) => { activation = work; }, respondWith() {} });
     await activation;
-    expect(deleted).toEqual(["gia-chuan-v4"]);
+    expect(deleted).toEqual(["gia-chuan-v4", "gia-chuan-static-v5"]);
 
     let intercepted = false;
-    for (const path of ["/api/rag/pages", "/api/rag/health", "/questions", "/"]) {
+    for (const path of ["/api/rag/pages", "/api/rag/health", "/questions", "/rag-admin", "/"]) {
       listeners.fetch!({ request: new Request(`http://localhost${path}`), waitUntil() {}, respondWith() { intercepted = true; } });
     }
     expect(intercepted).toBe(false);
-    expect(stored).toEqual([]);
+
+    const navigation = { url: "http://localhost/", method: "GET", mode: "navigate" } as Request;
+    let shellResponse: Promise<unknown> = Promise.resolve();
+    listeners.fetch!({ request: navigation, waitUntil() {}, respondWith(work) { shellResponse = work; } });
+    await shellResponse;
+
+    let assetResponse: Promise<unknown> = Promise.resolve();
+    listeners.fetch!({ request: new Request("http://localhost/_next/static/app.js"), waitUntil() {}, respondWith(work) { assetResponse = work; } });
+    await assetResponse;
+    expect(stored).toEqual(["/", "http://localhost/_next/static/app.js"]);
   });
 });

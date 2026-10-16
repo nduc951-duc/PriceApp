@@ -2,11 +2,13 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { LockKeyhole, Mail, ShieldCheck, Wifi } from "lucide-react";
+import { LockKeyhole, Mail, ShieldCheck, Store } from "lucide-react";
+import { Alert, Button, Card, Label, Spinner, TextInput } from "flowbite-react";
 import { createClient } from "@/lib/supabase/client";
 import { clearSnapshotCache } from "@/features/offline/cache";
+import { AuthLogoutContext } from "@/components/auth-actions-context";
 
-export function AuthGate({ children }: { children: React.ReactNode }) {
+export function AuthGate({ children, floatingLogout = true }: { children: React.ReactNode; floatingLogout?: boolean }) {
   const [supabase] = useState(() => createClient());
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(!supabase);
@@ -56,8 +58,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
-    try { await supabase?.auth.signOut(); }
+    try {
+      await supabase?.auth.signOut();
+    }
     finally {
+      localStorage.removeItem("gia-chuan-invoice");
       await clearSnapshotCache().catch(() => undefined);
       if ("caches" in window) {
         const keys = await caches.keys().catch(() => []);
@@ -66,31 +71,27 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }
 
-  if (!ready) return <div className="grid min-h-screen place-items-center text-sm text-[var(--muted)]">Đang kiểm tra phiên đăng nhập…</div>;
+  if (!ready) return <div className="grid min-h-screen place-items-center text-sm text-[var(--muted)]"><Spinner aria-label="Đang kiểm tra phiên đăng nhập" /> Đang kiểm tra phiên đăng nhập…</div>;
   if (!user) return (
     <main className="auth-page flex min-h-screen items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="mb-5 rounded-2xl border border-[var(--line)] bg-white p-7 text-center">
-          <span className="mx-auto mb-4 grid size-16 place-items-center rounded-2xl bg-[var(--green)] text-3xl font-black text-white">✓</span>
-          <h1 className="text-2xl font-black">Giá Chuẩn</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">Hệ thống tra giá vật tư nội bộ</p>
-        </div>
-        <div className="mb-5 flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">
-          <Wifi size={19} aria-hidden="true" /> Đăng nhập trực tuyến để tra cứu và cập nhật giá
-        </div>
-        {authUnavailable && <p role="alert" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">Không kết nối được máy chủ đăng nhập. Kiểm tra mạng hoặc cấu hình Supabase rồi tải lại trang.</p>}
-        <form onSubmit={login} className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="mb-6 text-xl font-bold">Đăng nhập vào ca trực</h2>
-          <label className="mb-2 block text-sm font-bold" htmlFor="email">Email</label>
-          <div className="relative mb-5"><Mail className="absolute left-4 top-3.5 text-[var(--muted)]" size={20} aria-hidden="true" /><input id="email" type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ten@cuahang.vn" className="h-12 w-full rounded-xl border border-[var(--line)] bg-white pl-12 pr-4 outline-none focus:border-[var(--green)]" /></div>
-          <label className="mb-2 block text-sm font-bold" htmlFor="password">Mật khẩu</label>
-          <div className="relative"><LockKeyhole className="absolute left-4 top-3.5 text-[var(--muted)]" size={20} aria-hidden="true" /><input id="password" type="password" required autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} className="h-12 w-full rounded-xl border border-[var(--line)] bg-white pl-12 pr-4 outline-none focus:border-[var(--green)]" /></div>
-          {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-          <button disabled={busy} className="mt-7 h-12 w-full rounded-xl bg-[var(--green)] font-bold text-white disabled:opacity-60">{busy ? "Đang đăng nhập…" : "ĐĂNG NHẬP"}</button>
-        </form>
+        <div className="mb-7 flex items-center gap-3"><Store size={26} className="text-blue-700"/><h1 className="text-lg font-semibold">Giá Chuẩn</h1></div>
+        {authUnavailable && <Alert color="warning" className="mb-5">Không kết nối được máy chủ đăng nhập. Kiểm tra mạng hoặc cấu hình Supabase rồi tải lại trang.</Alert>}
+        <Card className="rounded-lg border border-gray-200 bg-white shadow-none">
+          <form onSubmit={login}>
+          <h2 className="mb-2 text-xl font-semibold">Đăng nhập nhân viên</h2>
+          <p className="mb-6 text-sm text-gray-600">Dùng tài khoản được cửa hàng cấp để tiếp tục.</p>
+          <Label className="mb-2 block text-sm font-bold" htmlFor="email">Email</Label>
+          <TextInput id="email" type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ten@cuahang.vn" icon={Mail} className="mb-5" />
+          <Label className="mb-2 block text-sm font-bold" htmlFor="password">Mật khẩu</Label>
+          <TextInput id="password" type="password" required autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} icon={LockKeyhole} />
+          {error && <Alert color="failure" className="mt-4">{error}</Alert>}
+          <Button type="submit" fullSized disabled={busy} className="mt-6 min-h-11">{busy ? "Đang đăng nhập…" : "ĐĂNG NHẬP"}</Button>
+          </form>
+        </Card>
         <p className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-[var(--muted)]"><ShieldCheck size={15} /> Chỉ dành cho tài khoản nội bộ được cấp quyền</p>
       </div>
     </main>
   );
-  return <>{children}<button onClick={() => void logout()} className="fixed right-2 top-3 z-20 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-bold text-[var(--muted)] sm:right-5">Đăng xuất</button></>;
+  return <AuthLogoutContext.Provider value={logout}>{children}{floatingLogout && <Button color="light" onClick={() => void logout()} className="fixed right-2 top-3 z-40 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-bold text-[var(--muted)] sm:right-5">Đăng xuất</Button>}</AuthLogoutContext.Provider>;
 }

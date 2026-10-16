@@ -17,15 +17,20 @@ let client: SupabaseClient;
 
 const ask = () => queryRag({ question: "Giá tắc kê sắt 6x50?" }, client);
 
-function clientWithPrice(amount: () => number | null, sourceActive = true) {
+function clientWithPrice(amount: () => number | null, sourceActive = true, trackReads?: (name: string) => () => void) {
   return {
-    rpc: vi.fn(async (name: string) => name === "match_rag_chunks"
-      ? { data: sourceActive ? [{ id: 9, chunk_key: "page:1:variant:1:0", source_page_id: 1, product_variant_id: 1, content: "Tắc kê sắt 6x50", metadata: { page_number: 1 }, similarity: 0.9 }] : [], error: null }
-      : name === "current_rag_variant_sources"
-        ? { data: sourceActive ? [{ product_variant_id: 1, source_page_id: 1, page_number: 1 }] : [], error: null }
-        : { data: [{ id: 1, result_type: "variant" }], error: null }),
+    rpc: vi.fn(async (name: string) => {
+      if (name === "match_rag_chunks") return { data: sourceActive ? [{ id: 9, chunk_key: "page:1:variant:1:0", source_page_id: 1, product_variant_id: 1, content: "Tắc kê sắt 6x50", metadata: { page_number: 1 }, similarity: 0.9 }] : [], error: null };
+      const finish = trackReads?.(name);
+      if (finish) await new Promise<void>((resolve) => setTimeout(() => { finish(); resolve(); }, 5));
+      if (name === "current_rag_variant_sources") return { data: sourceActive ? [{ product_variant_id: 1, source_page_id: 1, page_number: 1 }] : [], error: null };
+      return { data: [{ id: 1, result_type: "variant" }], error: null };
+    }),
     from: vi.fn((table: string) => {
-      if (table === "product_variants") return { select: () => ({ in: () => ({ eq: () => ({ eq: async () => ({ data: [{
+      if (table === "product_variants") return { select: () => ({ in: () => ({ eq: () => ({ eq: async () => {
+        const finish = trackReads?.("prices");
+        if (finish) await new Promise<void>((resolve) => setTimeout(() => { finish(); resolve(); }, 5));
+        return { data: [{
         id: 1, display_name: "Tắc kê sắt 6x50", raw_specification: "6x50", verification_status: "verified",
         products: { name: "Tắc kê sắt", categories: { name: "Tắc kê" }, product_aliases: [] },
         variant_sources: [{ source_page_id: 1, source_pages: { page_number: 1 } }],
@@ -34,8 +39,13 @@ function clientWithPrice(amount: () => number | null, sourceActive = true) {
           valid_from: "2020-01-01T00:00:00Z", valid_to: null,
           price_lists: { name: "Sổ giá", effective_date: "2020-01-01", suppliers: { name: "Cửa hàng" } },
         }] }],
-      }], error: null }) }) }) }) };
-      if (table === "source_pages") return { select: () => ({ in: async () => ({ data: [{ id: 1, page_number: 1 }], error: null }) }) };
+      }], error: null };
+      } }) }) }) };
+      if (table === "source_pages") return { select: () => ({ in: async () => {
+        const finish = trackReads?.("source-pages");
+        if (finish) await new Promise<void>((resolve) => setTimeout(() => { finish(); resolve(); }, 5));
+        return { data: [{ id: 1, page_number: 1 }], error: null };
+      } }) };
       throw new Error(table);
     }),
   };
@@ -62,6 +72,34 @@ describe("RAG query uses current SQL prices", () => {
     expect(first.answer).toContain("10.000");
     expect(second.answer).toContain("12.000");
     expect(mocks.generateAnswer).not.toHaveBeenCalled();
+  });
+
+  it("starts price, source-validity, and page-number reads concurrently", async () => {
+    let inFlight = 0;
+    let peakInFlight = 0;
+    const trackReads = () => {
+      inFlight += 1;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      return () => { inFlight -= 1; };
+    };
+    client = clientWithPrice(() => 10000, true, trackReads) as unknown as SupabaseClient;
+
+    await ask();
+
+    expect(peakInFlight).toBe(3);
+  });
+
+  it("starts lexical retrieval while query embedding is still running", async () => {
+    let finishEmbedding!: (vectors: number[][]) => void;
+    mocks.embedTexts.mockImplementationOnce(() => new Promise<number[][]>((resolve) => { finishEmbedding = resolve; }));
+    client = clientWithPrice(() => 10000) as unknown as SupabaseClient;
+    const pending = ask();
+    await Promise.resolve();
+
+    expect((client.rpc as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("search_catalog", expect.any(Object));
+
+    finishEmbedding([Array(1024).fill(0.01)]);
+    await pending;
   });
 
   it("reports missing current prices without asking the model to invent one", async () => {

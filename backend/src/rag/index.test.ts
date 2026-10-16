@@ -59,6 +59,9 @@ function harness(text: string) {
         run.removed = rows.filter((row) => row.generation_id === active && !rows.some((candidate) => candidate.generation_id === run.id && candidate.chunk_key === row.chunk_key)).length;
         active = run.id as number;
         run.status = "completed";
+        for (let index = rows.length - 1; index >= 0; index--) {
+          if (rows[index]!.generation_id !== active) rows.splice(index, 1);
+        }
       }
       return { data: { ...run }, error: null };
     },
@@ -83,6 +86,21 @@ describe("staged index", () => {
     expect((await indexRag(client)).indexed).toBe(1);
     expect(mocks.embed).toHaveBeenCalledTimes(2);
     expect(state.getActive()).toBe(3);
+  });
+
+  it("keeps one active chunk when the same corpus is retried after success", async () => {
+    const state = harness("Tắc kê sắt 6x50");
+    client = state.client as unknown as SupabaseClient;
+
+    const first = await indexRag(client);
+    const retry = await indexRag(client);
+
+    expect(first.status).toBe("completed");
+    expect(retry).toMatchObject({ status: "completed", indexed: 0, reused: 1 });
+    expect(state.rows).toHaveLength(1);
+    expect(state.rows[0]!.generation_id).toBe(state.getActive());
+    expect(new Set(state.rows.map((row) => row.chunk_key)).size).toBe(1);
+    expect(mocks.embed).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the old generation active after a failed later batch and resumes", async () => {
@@ -120,7 +138,8 @@ describe("staged index", () => {
     const result = await indexRag(client);
     expect(result).toMatchObject({ indexed: 1, reused: 0, status: "completed" });
     expect(mocks.embed).toHaveBeenCalledTimes(2);
-    expect(state.rows[1]!.embedding_fingerprint).not.toBe(oldFingerprint);
+    expect(state.rows).toHaveLength(1);
+    expect(state.rows[0]!.embedding_fingerprint).not.toBe(oldFingerprint);
     expect(state.getActive()).toBe(result.runId);
   });
 });

@@ -13,7 +13,7 @@ function buildOpenApi(): Record<string, unknown> {
       description: status === "503" ? "Tạm thời không sẵn sàng hoặc chẩn đoán dịch vụ" : "Thành công",
       content: { "application/json": { schema: zodJsonSchema(schema) } },
     }]));
-    for (const status of [400, 401, 403, 409, 422, 503]) responses[status] ??= {
+    for (const status of [400, 401, 403, 409, 422, 429, 503]) responses[status] ??= {
       description: "Yêu cầu không được xử lý",
       content: { "application/json": { schema: zodJsonSchema(errorResponse) } },
     };

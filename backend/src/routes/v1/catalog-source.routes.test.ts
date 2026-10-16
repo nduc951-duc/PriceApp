@@ -8,7 +8,7 @@ function appFor(storageError: unknown = null) {
   const createSignedUrl = vi.fn().mockResolvedValue({ data: storageError ? null : { signedUrl: "https://private.example/signed" }, error: storageError });
   const from = vi.fn((table: string) => table === "profiles"
     ? { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: "viewer" }, error: null }) }) }) }
-    : { select: () => ({ eq: () => ({ neq: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) });
+    : { select: () => ({ eq: () => ({ neq: () => ({ order: () => ({ range: async () => ({ data: [], error: null }) }) }) }) }) });
   const storageFrom = vi.fn(() => ({ createSignedUrl }));
   const factory = (() => ({ auth: { getUser: async () => ({ data: { user: { id: "private-user" } }, error: null }) }, from, storage: { from: storageFrom } })) as SupabaseFactory;
   return { app: buildApp({ env, supabaseFactory: factory }), createSignedUrl, storageFrom };

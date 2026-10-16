@@ -18,6 +18,7 @@
 
 ## Bằng chứng và phần còn thiếu
 
+- Ngày 10/10/2026: kiểm tra lại unit tests `backend/src/rag/index.test.ts` và `provider.test.ts`; 13 tests qua. Đây chỉ xác nhận batching/resume và sắp xếp embedding ở local; migration L3 đã được áp dụng, nhưng chưa index trên database/corpus đã duyệt.
 - Ngày 04/10/2026: lint (một cảnh báo font đã có), typecheck, 32 unit tests và build đã qua. Unit test xác nhận chạy lại cùng text dùng 0 embedding mới, đổi text chỉ tạo embedding cho chunk đổi, và lỗi batch sau giữ generation cũ tới khi resume thành công.
 - Ngày 04/10/2026, Supabase REST từng trả 404 cho `rag_index_runs` và `rag_index_state`. Kiểm tra PostgreSQL ngày 05/10/2026 cho thấy schema L4 đã có từ trước nhưng lịch sử CLI chưa ghi; phần lịch sử đã được sửa như ghi ở đầu tài liệu.
 - Ollama local API đã chạy. Đã pull `bge-m3` và `qwen2.5:3b`; gọi `/api/embed` với `bge-m3` trả 1 vector 1.024 chiều. Endpoint `/v1/chat/completions` với `qwen2.5:3b` trả lời thành công. Chưa có kết quả thử đầy đủ với 13 trang và lỗi giữa batch trên database thật.
@@ -33,3 +34,7 @@
 Migration đã đồng bộ và model local đã xác nhận. Các bước còn lại cần phiên owner đăng nhập và nội dung đã được người có trách nhiệm cửa hàng duyệt.
 
 Chưa đánh dấu T04.1–T04.5 hoàn tất cho tới khi migration và luồng thật được kiểm chứng.
+
+## Reconciliation sau kiểm tra cloud
+
+Các blocker migration phía trên mô tả lịch sử ngày 05/10. Remote history hiện đã đồng bộ cho các migration L3/L4/RAG và hai migration hardening price RPC (`202610130001`, `202610130002`); regression SQL mới xác nhận các RPC từ chối profileless caller, `expected_version` rỗng và giá `NaN`. Kiểm tra local hiện gồm toàn bộ backend suite cùng integration E2E mock, nhưng chưa chạy index trên nguồn đã duyệt: 13 trang hiện vẫn là draft rỗng và chưa có tập benchmark adjudicate. Do đó L4 cloud schema được xác nhận, còn resume/reuse/revoke trên corpus thật vẫn chưa nghiệm thu.

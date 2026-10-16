@@ -10,4 +10,11 @@ describe("Vietnamese search", () => {
     expect(matchesCatalogQuery("tac ke", "Khung treo TV 32 inch c danh mom ke loa lon")).toBe(false);
     expect(matchesCatalogQuery("tac ke", "Tắc kê sắt 6x50")).toBe(true);
   });
+  it("requires an exact match for technical size tokens", () => {
+    expect(matchesCatalogQuery("bulong 6x50", "Bulong 6x50")).toBe(true);
+    expect(matchesCatalogQuery("bulong 6x50", "Bulong 6x60")).toBe(false);
+  });
+  it("applies normalized Vietnamese aliases in the catalog matcher", () => {
+    expect(matchesCatalogQuery("bu long 8 li", "Bulong 8ly")).toBe(true);
+  });
 });

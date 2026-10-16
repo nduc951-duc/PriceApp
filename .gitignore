@@ -49,3 +49,4 @@ dev-server*.log
 /supabase/.temp/
 /.worktrees/
 /.superpowers/sdd/
+/.flowbite-react/

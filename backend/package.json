@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "node --env-file-if-exists=.env.local --import tsx src/server.ts",
     "dev:watch": "node --env-file-if-exists=.env.local --import tsx --watch src/server.ts",
+    "dev:worker": "node --env-file-if-exists=.env.local --import tsx src/rag-worker.ts",
+    "request:rag-reindex": "node --env-file-if-exists=.env.local --import tsx src/request-rag-reindex.ts",
     "start": "node --env-file-if-exists=.env.local dist/server.js",
+    "start:worker": "node --env-file-if-exists=.env.local dist/rag-worker.js",
+    "start:request:rag-reindex": "node --env-file-if-exists=.env.local dist/request-rag-reindex.js",
     "build": "tsc -p tsconfig.json",
     "openapi:generate": "tsx scripts/generate-contract.ts",
     "api:types": "tsx scripts/generate-contract.ts",
@@ -28,6 +32,6 @@
     "eslint": "^9",
     "tsx": "^4.20.0",
     "typescript": "^5",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }

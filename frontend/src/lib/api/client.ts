@@ -15,6 +15,7 @@ const statusMessages: Record<number, string> = {
   404: "Không tìm thấy dữ liệu được yêu cầu.",
   409: "Dữ liệu vừa được người khác cập nhật. Hãy tải lại rồi thử lại.",
   422: "Thông tin chưa hợp lệ. Vui lòng kiểm tra lại.",
+  429: "Cửa hàng đang nhận nhiều yêu cầu. Vui lòng đợi ít phút rồi thử lại.",
   503: "Dịch vụ đang tạm thời gián đoạn. Vui lòng thử lại sau.",
 };
 
@@ -27,6 +28,9 @@ const codeMessages: Record<string, string> = {
   INVALID_INPUT: statusMessages[422],
   INVALID_API_RESPONSE: "Máy chủ trả về dữ liệu không đúng định dạng.",
   API_UNAVAILABLE: statusMessages[503],
+  OCR_UNAVAILABLE: "Ollama chưa sẵn sàng hoặc chưa có model OCR. Mở Ollama, cài model đã cấu hình rồi thử lại.",
+  TOO_MANY_REQUESTS: statusMessages[429],
+  CONFLICT: "Giá vừa thay đổi. Kiểm tra lại giỏ hàng rồi gửi yêu cầu lần nữa.",
 };
 
 export class ApiRequestError extends Error {
@@ -37,10 +41,10 @@ export class ApiRequestError extends Error {
 }
 
 /** Calls the configured API with the current caller session. */
-export async function requestApi<T>(path: string, init: RequestInit = {}, options: {
+async function sendApi<T>(path: string, init: RequestInit, options: {
   acceptedStatuses?: readonly number[];
   validateAcceptedResponse?: (value: unknown) => value is T;
-} = {}): Promise<T> {
+}, accessToken?: string): Promise<T> {
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!base) throw new ApiRequestError(503, "API_NOT_CONFIGURED");
   const baseUrl = new URL(base);
@@ -48,12 +52,8 @@ export async function requestApi<T>(path: string, init: RequestInit = {}, option
   if (!path.startsWith("/api/v1/") || url.origin !== baseUrl.origin || !url.pathname.startsWith("/api/v1/")) {
     throw new ApiRequestError(400, "INVALID_API_PATH");
   }
-  const supabase = createClient();
-  if (!supabase) throw new ApiRequestError(503, "AUTH_NOT_CONFIGURED");
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session?.access_token) throw new ApiRequestError(401, "SESSION_REQUIRED");
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${data.session.access_token}`);
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   headers.set("Accept", "application/json");
   if (init.body !== undefined && init.body !== null && !headers.has("Content-Type") && !(typeof FormData !== "undefined" && init.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
@@ -79,6 +79,26 @@ export async function requestApi<T>(path: string, init: RequestInit = {}, option
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+/** Calls the configured API with the current caller session. */
+export async function requestApi<T>(path: string, init: RequestInit = {}, options: {
+  acceptedStatuses?: readonly number[];
+  validateAcceptedResponse?: (value: unknown) => value is T;
+} = {}): Promise<T> {
+  const supabase = createClient();
+  if (!supabase) throw new ApiRequestError(503, "AUTH_NOT_CONFIGURED");
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.access_token) throw new ApiRequestError(401, "SESSION_REQUIRED");
+  return sendApi(path, init, options, data.session.access_token);
+}
+
+/** Calls a deliberately public endpoint without reading or requiring a staff session. */
+export function requestPublicApi<T>(path: string, init: RequestInit = {}, options: {
+  acceptedStatuses?: readonly number[];
+  validateAcceptedResponse?: (value: unknown) => value is T;
+} = {}): Promise<T> {
+  return sendApi(path, init, options);
 }
 
 export const apiRequest = requestApi;

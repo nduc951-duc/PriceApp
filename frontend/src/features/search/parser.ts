@@ -19,9 +19,10 @@ export function rankMatch(query:string,target:string,aliasesList:string[]=[]){
   const hits=q.split(" ").filter(x=>t.includes(x)).length; return hits/q.split(" ").length*60;
 }
 export function matchesCatalogQuery(query:string,target:string){
+  const normalizedQuery=parseQuery(query).normalized;
   const words=normalizeVietnamese(target).split(/\s+/).filter(Boolean);
-  return normalizeVietnamese(query).split(/\s+/).filter(Boolean).every(term=>
-    words.some(word=>word.includes(term)||(term.length>=4&&editDistance(word,term)<=1))
+  return normalizedQuery.split(/\s+/).filter(Boolean).every(term=>
+    words.some(word=>word.includes(term)||(!/\d/.test(term)&&term.length>=4&&editDistance(word,term)<=1))
   );
 }
 function editDistance(a:string,b:string){

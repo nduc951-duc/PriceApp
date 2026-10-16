@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: mocks.createClient }));
-import { requestApi, ApiRequestError } from "./client";
+import { requestApi, requestPublicApi, ApiRequestError } from "./client";
 import { isRagHealthDiagnostics } from "./rag-health";
 
 const healthDiagnostics = {
@@ -25,6 +25,18 @@ it("uses the current session bearer token for each API request", async () => {
   expect(fetcher).toHaveBeenCalledWith("https://api.example/api/v1/health", expect.objectContaining({ headers: expect.any(Headers) }));
   expect((fetcher.mock.calls[0][1].headers as Headers).get("Authorization")).toBe("Bearer private-token");
   vi.unstubAllGlobals();
+});
+
+it("sends public catalog and order requests without creating or attaching a staff session", async () => {
+  const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [], syncedAt: "now" }), { status: 200, headers: { "content-type": "application/json" } }));
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    expect(await requestPublicApi("/api/v1/public/catalog")).toEqual({ items: [], syncedAt: "now" });
+    const headers = fetcher.mock.calls[0][1].headers as Headers;
+    expect(headers.get("Authorization")).toBeNull();
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  } finally { vi.unstubAllGlobals(); }
 });
 
 it("uses the refreshed session token on the next request instead of caching a token", async () => {

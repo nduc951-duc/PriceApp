@@ -11,6 +11,7 @@ export interface QueryUnderstanding {
   package?: string;
   quantity?: number;
   tier?: PriceTier;
+  tierConflict: boolean;
 }
 
 export interface UnderstandQueryOptions {
@@ -161,7 +162,19 @@ export function understandQuery(input: string, options: UnderstandQueryOptions =
     ...(packageFound[0] ? { package: sourceValue(input, packageFound[0]) } : {}),
     ...(quantity !== undefined ? { quantity } : {}),
     ...(tier ? { tier } : {}),
+    tierConflict: tiersFound.size > 1,
   };
+}
+
+/** Carry prior product words into a clear follow-up without carrying old specs, tiers, or quantities. */
+export function resolveFollowUpQuestion(previousQuestion: string | undefined, currentQuestion: string): string {
+  if (!previousQuestion || !/^\s*còn\b/i.test(currentQuestion)) return currentQuestion;
+  const followUpText = currentQuestion.replace(/^\s*còn\b\s*/i, "").replace(/^\s*(?:loại|quy\s+cách)\b\s*/i, "");
+  const current = understandQuery(followUpText);
+  if (current.nameTerms.length > 0 || current.aliases.length > 0) return followUpText;
+  const previous = understandQuery(previousQuestion);
+  const productTerms = [...previous.aliases, ...previous.nameTerms];
+  return productTerms.length > 0 ? `${productTerms.join(" ")} ${followUpText}`.trim() : followUpText;
 }
 
 export function toHardFilters(query: QueryUnderstanding): HardFilters {

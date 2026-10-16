@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { embedTexts, normalizeIndexedEmbeddings, RagProviderUnavailableError } from "./provider.js";
+import { embedTexts, generateGroundedAnswer, normalizeIndexedEmbeddings, RagProviderUnavailableError } from "./provider.js";
 
 const vector = () => Array(1024).fill(0.1);
 
@@ -27,6 +27,38 @@ it("keeps provider response bodies out of errors", async () => {
     expect(error.message).toContain("HTTP 401");
     expect(error.message).not.toMatch(/private-token|raw-OCR|private-user/);
   } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs(); }
+});
+
+describe("Ollama model residency", () => {
+  it("sets a configurable keep-alive for embeddings", async () => {
+    vi.stubEnv("RAG_AI_PROVIDER", "ollama");
+    vi.stubEnv("RAG_AI_BASE_URL", "http://localhost:11434");
+    vi.stubEnv("RAG_EMBEDDING_MODEL", "bge-m3");
+    vi.stubEnv("RAG_OLLAMA_KEEP_ALIVE", "15m");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ embeddings: [vector()] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await embedTexts(["question"]);
+      const [url, init] = fetchMock.mock.calls[0] as [string, { body?: string }];
+      expect(url).toBe("http://localhost:11434/api/embed");
+      expect(JSON.parse(String(init.body))).toMatchObject({ keep_alive: "15m" });
+    } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs(); }
+  });
+
+  it("uses Ollama chat API so the configured keep-alive applies to answers", async () => {
+    vi.stubEnv("RAG_AI_PROVIDER", "ollama");
+    vi.stubEnv("RAG_AI_BASE_URL", "http://localhost:11434");
+    vi.stubEnv("RAG_CHAT_MODEL", "qwen2.5:3b");
+    vi.stubEnv("RAG_OLLAMA_KEEP_ALIVE", "15m");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: { content: "Grounded answer" } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(generateGroundedAnswer({ question: "question", evidence: [] })).resolves.toBe("Grounded answer");
+      const [url, init] = fetchMock.mock.calls[0] as [string, { body?: string }];
+      expect(url).toBe("http://localhost:11434/api/chat");
+      expect(JSON.parse(String(init.body))).toMatchObject({ keep_alive: "15m", stream: false });
+    } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs(); }
+  });
 });
 
 it.each([429, 500, 503])("classifies provider HTTP %i as a safe transient outage", async (status) => {

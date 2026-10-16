@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchesHardFilters, toHardFilters, understandQuery } from "./query-understanding.js";
+import { matchesHardFilters, resolveFollowUpQuestion, toHardFilters, understandQuery } from "./query-understanding.js";
 
 describe("Vietnamese query understanding", () => {
   it("extracts diacritic-insensitive aliases and explicit product attributes", () => {
@@ -49,5 +49,19 @@ describe("Vietnamese query understanding", () => {
     const parsed = understandQuery("Tắc kê");
     expect(toHardFilters(parsed)).toEqual({});
     expect(matchesHardFilters({ dimensions: ["6x50"], material: "sắt", package: "bịch" }, parsed)).toBe(true);
+  });
+
+  it("marks conflicting explicit price tiers for clarification", () => {
+    expect(understandQuery("giá sỉ hay giá lẻ tắc kê")).toMatchObject({ tierConflict: true });
+    expect(understandQuery("giá sỉ tắc kê")).toMatchObject({ tier: "wholesale", tierConflict: false });
+  });
+
+  it("uses only prior product words for a follow-up and lets new attributes replace old ones", () => {
+    expect(resolveFollowUpQuestion("Bulong 8 ly giá sỉ", "còn loại 10 ly?"))
+      .toBe("Bulong 10 ly?");
+    expect(resolveFollowUpQuestion("Bulong 8 ly", "còn vít 10 ly?"))
+      .toBe("vít 10 ly?");
+    expect(resolveFollowUpQuestion("Bulong 8 ly", "vít 10 ly?"))
+      .toBe("vít 10 ly?");
   });
 });

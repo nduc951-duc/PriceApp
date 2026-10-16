@@ -1,7 +1,14 @@
 import { z } from "zod";
 import { ApiRequestError } from "@/lib/api/client";
 export const priceSchema=z.coerce.number().finite().nonnegative().max(999_999_999_999);
-export const formatVnd=(amount:number)=>new Intl.NumberFormat("vi-VN",{style:"currency",currency:"VND",maximumFractionDigits:0}).format(amount);
+export const formatVnd=(amount:number)=>new Intl.NumberFormat("vi-VN",{style:"currency",currency:"VND",maximumFractionDigits:2}).format(amount);
+
+export function parsePriceInput(raw: string): number | null {
+  const value = raw.trim();
+  if (!/^\d+(?:[.,]\d{1,2})?$/.test(value)) return null;
+  const parsed = Number(value.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export function priceWriteErrorMessage(error: unknown): string {
   if (error instanceof ApiRequestError) {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { catalogUpdateSchema, priceUndoSchema, priceUpdateSchema } from "../schemas/prices.schema.js";
 import { signedUrlBody } from "../schemas/source-files.schema.js";
+import { customerOrderBodySchema, customerOrderIdParamsSchema, customerOrderListSchema, customerOrderReceiptSchema, customerOrderStatusBodySchema, publicCatalogResponseSchema } from "../schemas/customer-orders.schema.js";
 
 const id = z.number().int().positive();
 const text = z.string();
@@ -26,10 +27,35 @@ const catalogUpdateResponse = z.object({
   price: z.object({ id, amount: z.number(), version: z.number().int(), priceType: z.enum(["retail", "wholesale", "dealer"]), minimumQuantity: z.number() }).nullable(),
 });
 const signedUrlResponse = z.object({ signedUrl: z.url(), expiresIn: z.literal(300) });
-const ragQueryBody = z.strictObject({ question: z.string().trim().min(1).max(1000) });
+const ragQueryBody = z.strictObject({ question: z.string().trim().min(1).max(1000), conversationId: z.uuid().optional() });
+const conversationIdParams = z.strictObject({ conversationId: z.uuid() });
+const conversation = z.object({ id: z.uuid(), created_at: text });
+const conversationListResponse = z.object({ conversations: z.array(conversation) });
+const conversationMessage = z.object({
+  id: z.uuid(), role: z.enum(["user", "assistant"]), content: text.nullable(),
+  metadata: z.record(z.string(), z.unknown()), created_at: text,
+});
+const conversationMessagesResponse = z.object({ messages: z.array(conversationMessage) });
+// The controller applies the allowlist. Keep unknown metadata fields intact here so
+// Fastify cannot silently strip a forbidden amount/price before strict validation.
+const conversationMetadataInput = z.record(z.string(), z.unknown()).optional();
+const appendConversationMessageBody = z.strictObject({
+  role: z.literal("user"),
+  content: z.string().trim().min(1).max(4000),
+  metadata: conversationMetadataInput,
+});
+const ragFeedbackReason = z.enum(["missing_data", "retrieval_error", "answer_error", "other"]);
+const submitRagFeedbackBody = z.union([
+  z.strictObject({ assistantMessageId: z.uuid(), helpful: z.literal(true), reason: ragFeedbackReason.optional() }),
+  z.strictObject({ assistantMessageId: z.uuid(), helpful: z.literal(false), reason: ragFeedbackReason }),
+]);
+const feedbackSummary = z.object({
+  total: z.number().int().nonnegative(), helpful: z.number().int().nonnegative(), notHelpful: z.number().int().nonnegative(),
+  reasons: z.array(z.object({ reason: ragFeedbackReason, count: z.number().int().nonnegative() })), truncated: z.boolean(),
+});
 const verificationStatus = z.enum(["verified", "needs_review", "unreadable", "sample"]);
 const ragPrice = z.object({
-  id, amount: z.number(), priceType: z.enum(["retail", "wholesale", "dealer"]), minimumQuantity: z.number(),
+  id, packagingId: id, version: z.number().int(), amount: z.number(), priceType: z.enum(["retail", "wholesale", "dealer"]), minimumQuantity: z.number(),
   packagingName: text, packageQuantity: z.number(), unit: text, packageNote: text,
   priceList: text.nullable(), supplier: text.nullable(), verificationStatus,
 });
@@ -37,43 +63,74 @@ const ragItem = z.object({
   id, productName: text, category: text, variant: text, verificationStatus,
   sourcePages: z.array(z.number()), prices: z.array(ragPrice),
 });
-const ragSource = z.object({ pageNumber: z.number(), excerpt: text });
+const ragSource = z.object({
+  pageNumber: id, chunkId: id, chunkKey: text, sourceRevision: id,
+  sourceSpan: z.object({ start: z.number().int().nonnegative(), end: z.number().int().positive() }),
+  excerpt: text, evidenceKind: z.enum(["approved_page_ocr", "verified_catalog"]),
+  verifiedVariantId: id.optional(), verifiedPriceId: id.optional(),
+});
 const ragTrace = z.object({ question: text, chunkIds: z.array(id), variantIds: z.array(id), priceIds: z.array(id), answer: text });
 const ragQueryResponse = z.object({
+  status: z.enum(["answered", "clarify", "insufficient_evidence"]), clarification: text.optional(), conversationId: z.uuid().optional(), feedbackMessageId: z.uuid().optional(),
   answer: text, items: z.array(ragItem), sources: z.array(ragSource),
   retrieval: z.object({ vectorChunks: z.number(), lexicalProducts: z.number(), embeddingModel: text, trace: ragTrace.optional() }),
 });
-const ragPage = z.object({ sourcePageId: id, pageNumber: z.number().nullable(), title: text, extractedText: text, reviewStatus: z.enum(["draft", "approved", "rejected"]), revision: z.number().int() });
+const chunkSettings = z.object({ maxCharacters: z.number().int(), overlapCharacters: z.number().int() });
+const ragPage = z.object({
+  sourcePageId: id, pageNumber: z.number().nullable(), storagePath: text, sourceStatus: text, title: text, extractedText: text,
+  reviewStatus: z.enum(["draft", "approved", "rejected"]), revision: z.number().int(), reviewedBy: text.nullable(), reviewedAt: text.nullable(), updatedAt: text, chunkSettings,
+  chunkLinks: z.record(text, id), chunkCount: z.number().int(), indexedAt: text.nullable(), indexError: text.nullable(),
+  variants: z.array(z.object({ id, name: text })),
+});
 const pagesResponse = z.object({ pages: z.array(ragPage) });
-const savePageBody = z.object({ sourcePageId: id, title: text, extractedText: text, reviewStatus: z.enum(["draft", "approved", "rejected"]) });
+const savePageBody = z.object({ sourcePageId: id, title: text, extractedText: text, reviewStatus: z.enum(["draft", "approved", "rejected"]), chunkSettings, chunkLinks: z.record(text, id) });
 const savePageResponse = z.object({ saved: z.literal(true), reviewStatus: z.enum(["draft", "approved", "rejected"]), revision: z.number().int() });
 const indexRun = z.object({ runId: id, status: z.enum(["running", "failed", "completed"]), checkpoint: z.number(), chunks: z.number(), indexed: z.number(), reused: z.number(), removed: z.number(), embeddingModel: text, contentHash: text });
 const indexResponse = z.object({ run: indexRun.nullable() });
 const indexRunResponse = indexRun.extend({ pages: z.number(), variants: z.number(), embeddingDimensions: z.number() });
+const indexJobResponse = z.object({ job: z.object({
+  status: z.enum(["queued", "running", "completed", "failed"]), requestedRevision: z.number().int(), completedRevision: z.number().int(),
+  attempts: z.number().int(), maxAttempts: z.number().int(), availableAt: text, lastErrorCode: text.nullable(),
+  lastErrorMessage: text.nullable(), updatedAt: text,
+}).nullable() });
 const failedDiagnostic = z.object({ ok: z.literal(false), detail: text });
 const databaseDiagnostic = z.union([failedDiagnostic, z.object({ ok: z.literal(true), detail: text, count: z.number() })]);
 const embeddingDiagnostic = z.union([failedDiagnostic, z.object({ ok: z.literal(true), detail: text, model: text, dimensions: z.number(), fingerprint: text })]);
 const chatDiagnostic = z.union([failedDiagnostic, z.object({ ok: z.literal(true), detail: text, model: text })]);
 const ragHealthResponse = z.object({ ok: z.boolean(), provider: text, database: databaseDiagnostic, embedding: embeddingDiagnostic, chat: chatDiagnostic });
-const previewBody = z.strictObject({ extractedText: z.string().max(100_000) });
-const previewResponse = z.object({ source: text, chunks: z.array(z.object({ index: z.number(), content: text, start: z.number(), end: z.number() })) });
+const previewBody = z.strictObject({ extractedText: z.string().max(100_000), chunkSettings: chunkSettings.optional() });
+const previewResponse = z.object({ source: text, chunks: z.array(z.object({ index: z.number(), content: text, heading: text.nullable(), start: z.number(), end: z.number() })) });
+const ocrBody = z.strictObject({ imageBase64: z.string().min(16).max(900_000), mimeType: z.enum(["image/jpeg", "image/png"]) });
+const ocrResponse = z.object({ model: text, text: text });
 const priceIdPathParams = z.object({ priceId: z.string().regex(/^[1-9]\d*$/) });
 
 export const apiContracts = [
   { method: "get", path: "/api/v1/health", operationId: "getHealth", summary: "Kiểm tra trạng thái API", response: { 200: z.object({ status: z.literal("ok") }) } },
   { method: "get", path: "/api/v1/me", operationId: "getCurrentUser", summary: "Lấy tài khoản và vai trò", auth: true, response: { 200: meResponse } },
   { method: "get", path: "/api/v1/catalog", operationId: "getCatalog", summary: "Đọc danh mục và giá", auth: true, response: { 200: catalogResponse } },
+  { method: "get", path: "/api/v1/public/catalog", operationId: "getPublicCustomerCatalog", summary: "Đọc danh mục và giá công khai cho khách", response: { 200: publicCatalogResponseSchema } },
+  { method: "post", path: "/api/v1/public/order-requests", operationId: "createPublicCustomerOrder", summary: "Tạo yêu cầu đơn hàng công khai", body: customerOrderBodySchema, response: { 201: customerOrderReceiptSchema } },
+  { method: "get", path: "/api/v1/customer-order-requests", operationId: "listCustomerOrderRequests", summary: "Liệt kê yêu cầu đơn của cửa hàng", auth: true, roles: ["owner", "editor"], response: { 200: customerOrderListSchema } },
+  { method: "patch", path: "/api/v1/customer-order-requests/{requestId}/status", operationId: "updateCustomerOrderStatus", summary: "Cập nhật trạng thái xử lý yêu cầu đơn", auth: true, roles: ["owner", "editor"], params: customerOrderIdParamsSchema, body: customerOrderStatusBodySchema, response: { 200: z.object({ updated: z.literal(true) }) } },
   { method: "post", path: "/api/v1/source-files/signed-url", operationId: "createSourceSignedUrl", summary: "Tạo URL ảnh nguồn có thời hạn", auth: true, body: signedUrlBody, response: { 200: signedUrlResponse } },
   { method: "post", path: "/api/v1/prices/{priceId}/update", operationId: "updatePrice", summary: "Cập nhật giá có kiểm toán", auth: true, body: priceUpdateSchema, params: priceIdPathParams, response: { 200: priceUpdateResponse } },
   { method: "post", path: "/api/v1/catalog/update", operationId: "updateCatalogItem", summary: "Cập nhật mặt hàng", auth: true, body: catalogUpdateSchema, response: { 200: catalogUpdateResponse } },
   { method: "post", path: "/api/v1/prices/undo", operationId: "undoPrice", summary: "Hoàn tác giá có kiểm toán", auth: true, body: priceUndoSchema, response: { 200: priceWriteResponse } },
   { method: "post", path: "/api/v1/rag/query", operationId: "queryKnowledgeBase", summary: "Tra cứu tài liệu và giá", auth: true, body: ragQueryBody, response: { 200: ragQueryResponse } },
-  { method: "get", path: "/api/v1/admin/rag/pages", operationId: "listRagPages", summary: "Liệt kê trang nguồn", auth: true, owner: true, response: { 200: pagesResponse } },
-  { method: "put", path: "/api/v1/admin/rag/pages", operationId: "saveRagPage", summary: "Lưu trạng thái duyệt trang", auth: true, owner: true, body: savePageBody, response: { 200: savePageResponse } },
+  { method: "post", path: "/api/v1/rag/conversations", operationId: "createRagConversation", summary: "Tạo hội thoại RAG của người dùng", auth: true, response: { 200: conversation } },
+  { method: "get", path: "/api/v1/rag/conversations", operationId: "listRagConversations", summary: "Liệt kê hội thoại RAG của người dùng", auth: true, response: { 200: conversationListResponse } },
+  { method: "get", path: "/api/v1/rag/conversations/{conversationId}", operationId: "readRagConversation", summary: "Đọc tin nhắn hội thoại RAG", auth: true, params: conversationIdParams, response: { 200: conversationMessagesResponse } },
+  { method: "post", path: "/api/v1/rag/conversations/{conversationId}/messages", operationId: "appendRagConversationMessage", summary: "Thêm câu hỏi hoặc metadata trả lời vào hội thoại", auth: true, params: conversationIdParams, body: appendConversationMessageBody, response: { 200: conversationMessage } },
+  { method: "post", path: "/api/v1/rag/conversations/{conversationId}/feedback", operationId: "submitRagFeedback", summary: "Gửi đánh giá câu trả lời RAG", auth: true, params: conversationIdParams, body: submitRagFeedbackBody, response: { 200: z.object({ saved: z.literal(true) }) } },
+  { method: "get", path: "/api/v1/admin/rag/feedback", operationId: "getRagFeedbackSummary", summary: "Xem tổng hợp phản hồi RAG", auth: true, owner: true, response: { 200: feedbackSummary } },
+  { method: "get", path: "/api/v1/admin/rag/pages", operationId: "listRagPages", summary: "Liệt kê trang nguồn cho OCR", auth: true, response: { 200: pagesResponse } },
+  { method: "put", path: "/api/v1/admin/rag/pages", operationId: "saveRagPage", summary: "Lưu bản nháp trang nguồn", auth: true, body: savePageBody, response: { 200: savePageResponse } },
   { method: "get", path: "/api/v1/admin/rag/index", operationId: "getRagIndex", summary: "Lấy tiến độ lập chỉ mục", auth: true, owner: true, response: { 200: indexResponse } },
+  { method: "get", path: "/api/v1/admin/rag/index-job", operationId: "getRagIndexJobStatus", summary: "Lấy trạng thái job lập chỉ mục tự động", auth: true, owner: true, response: { 200: indexJobResponse } },
   { method: "post", path: "/api/v1/admin/rag/index", operationId: "buildRagIndex", summary: "Lập chỉ mục tài liệu", auth: true, owner: true, response: { 200: indexRunResponse } },
   { method: "get", path: "/api/v1/admin/rag/health", operationId: "getRagHealth", summary: "Kiểm tra dịch vụ RAG", auth: true, owner: true, response: { 200: ragHealthResponse, 503: z.union([ragHealthResponse, errorResponse]) } },
-  { method: "post", path: "/api/v1/admin/rag/preview", operationId: "previewRagPage", summary: "Xem trước phân đoạn văn bản", auth: true, owner: true, body: previewBody, response: { 200: previewResponse } },
+  { method: "post", path: "/api/v1/admin/rag/preview", operationId: "previewRagPage", summary: "Xem trước phân đoạn văn bản OCR", auth: true, body: previewBody, response: { 200: previewResponse } },
+  { method: "post", path: "/api/v1/admin/rag/ocr", operationId: "scanRagPageOcr", summary: "Quét OCR ảnh trang nguồn", auth: true, body: ocrBody, response: { 200: ocrResponse } },
 ] as const;
 
 export type ApiContract = typeof apiContracts[number];
@@ -92,14 +149,15 @@ export function zodJsonSchema(schema: z.ZodType): Record<string, unknown> {
 }
 
 export function fastifyRouteSchema(contract: ApiContract): Record<string, unknown> {
-  const result: Record<string, unknown> = { summary: contract.summary, operationId: contract.operationId, tags: [contract.path.includes("/admin/") ? "RAG Admin" : "PriceApp"] };
+  const result: Record<string, unknown> = { summary: contract.summary, operationId: contract.operationId, tags: [contract.path.includes("customer-order") || contract.path.includes("public/") ? "Customer Orders" : contract.path.includes("/admin/") ? "RAG Admin" : "PriceApp"] };
   if ("auth" in contract && contract.auth) result.security = [{ bearerAuth: [] }];
   if ("owner" in contract && contract.owner) result["x-required-role"] = ["owner"];
+  if ("roles" in contract && contract.roles) result["x-required-role"] = contract.roles;
   if ("body" in contract && contract.body) result.body = zodJsonSchema(contract.body);
   if ("params" in contract && contract.params) result.params = zodJsonSchema(contract.params);
   const response: Record<number, Record<string, unknown>> = {};
   for (const [status, schema] of Object.entries(contract.response)) response[Number(status)] = zodJsonSchema(schema);
-  for (const status of [400, 401, 403, 409, 422, 503]) response[status] ??= zodJsonSchema(errorResponse);
+  for (const status of [400, 401, 403, 409, 422, 429, 503]) response[status] ??= zodJsonSchema(errorResponse);
   result.response = response;
   return result;
 }
