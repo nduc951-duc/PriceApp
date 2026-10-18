@@ -28,7 +28,6 @@ const codeMessages: Record<string, string> = {
   INVALID_INPUT: statusMessages[422],
   INVALID_API_RESPONSE: "Máy chủ trả về dữ liệu không đúng định dạng.",
   API_UNAVAILABLE: statusMessages[503],
-  OCR_UNAVAILABLE: "Ollama chưa sẵn sàng hoặc chưa có model OCR. Mở Ollama, cài model đã cấu hình rồi thử lại.",
   TOO_MANY_REQUESTS: statusMessages[429],
   CONFLICT: "Giá vừa thay đổi. Kiểm tra lại giỏ hàng rồi gửi yêu cầu lần nữa.",
 };

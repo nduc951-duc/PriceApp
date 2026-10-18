@@ -1,14 +1,28 @@
 import { expect, test } from "@playwright/test";
 
 test("catalog failure is distinct from an empty public catalog and retry recovers", async ({ page }, testInfo) => {
+  await page.emulateMedia({ colorScheme: "dark" });
   let failing = true;
   await page.route("**/api/v1/public/catalog", route => route.fulfill({
     status: failing ? 503 : 200, contentType: "application/json",
     body: failing ? JSON.stringify({ error: { message: "Unavailable" } }) : JSON.stringify({ items: [], syncedAt: new Date().toISOString() }),
   }));
   await page.goto("/");
+  const customerDescription = page.getByText(/Xem giá lẻ, giá sỉ/);
+  const employeeDescription = page.getByText(/Tra cứu, cập nhật giá và xử lý yêu cầu/);
+  await expect(customerDescription).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(employeeDescription).toHaveCSS("color", "rgb(255, 255, 255)");
+  for (const card of await page.locator(".role-choice-card").all()) {
+    await expect(card).toHaveCSS("background-color", "rgb(29, 78, 216)");
+  }
+  for (const name of ["Khách hàng", "Nhân viên"]) {
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCSS("color", "rgb(30, 64, 175)");
+  }
   await expect(page.getByRole("button", { name: "Chưa đăng nhập", exact: true })).toBeDisabled();
-  await page.screenshot({ path: testInfo.outputPath("role-entry.png") });
+  await expect(page.locator("main")).toHaveCSS("background-image", /role-storefront-background/);
+  await page.evaluate(async () => { const background = new Image(); background.src = "/images/role-storefront-background.webp"; await background.decode(); });
+  await page.screenshot({ path: testInfo.outputPath("role-entry.png"), animations: "disabled" });
   await page.getByRole("button", { name: /Khách hàng/ }).click();
   await expect(page.getByText("Chưa tải được bảng giá", { exact: true })).toBeVisible();
   await expect(page.getByText(/Chưa có mặt hàng công khai|0 mức giá|Giá đang áp dụng/)).toHaveCount(0);
@@ -27,6 +41,12 @@ test("shop layout keeps real units readable and the cart usable on narrow screen
   await page.goto("/");
   await page.getByRole("button", { name: /Khách hàng/ }).click();
   await expect(page.getByRole("heading", { name: "Tra giá và đặt hàng" })).toBeVisible();
+  const banner = page.getByRole("region", { name: "Vật tư cho công trình của bạn" });
+  await expect(banner).toBeVisible();
+  await expect.poll(() => banner.locator("img").evaluate(image => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0)).toBe(true);
+  await banner.screenshot({ path: testInfo.outputPath("shop-banner.png") });
+  await banner.getByRole("link", { name: "Xem sản phẩm" }).click();
+  await expect(page).toHaveURL(/\/shop#shop-catalog$/);
   await expect(page.getByText("/ gói 100 cái").first()).toBeVisible();
   if (testInfo.project.name === "chromium") {
     for (const [width, height] of [[390, 844], [768, 1024], [1024, 768], [1440, 900]]) {
@@ -37,7 +57,7 @@ test("shop layout keeps real units readable and the cart usable on narrow screen
   }
   await page.getByRole("button", { name: "Thêm giá lẻ" }).first().click();
   await page.reload();
-  await expect(page).toHaveURL(/\/shop$/);
+  await expect(page).toHaveURL(/\/shop(?:#shop-catalog)?$/);
   await expect(page.getByRole("button", { name: "Giỏ hàng (1)", exact: true })).toBeVisible();
   if (testInfo.project.name === "mobile") {
     await page.getByRole("button", { name: /Xem giỏ/ }).click();

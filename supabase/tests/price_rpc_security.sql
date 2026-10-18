@@ -1,6 +1,24 @@
--- Run against an isolated Supabase project or with `supabase db query --linked --file`.
+-- Run only against an isolated local/test database, never a linked production project.
 -- This suite uses nonexistent IDs and a transaction; it must never change catalog rows.
 begin;
+
+-- The security checks need one owner identity to exercise authenticated RPC
+-- validation. Keep the synthetic Auth/profile fixture inside this transaction
+-- so it is removed by the final rollback.
+insert into auth.users (id, aud, role, email, raw_app_meta_data, raw_user_meta_data)
+values (
+  '00000000-0000-4000-8000-000000000098',
+  'authenticated',
+  'authenticated',
+  'price-rpc-security@example.test',
+  '{}'::jsonb,
+  '{}'::jsonb
+)
+on conflict (id) do nothing;
+
+insert into public.profiles (id, role)
+values ('00000000-0000-4000-8000-000000000098', 'owner')
+on conflict (id) do update set role = 'owner';
 
 do $$
 declare

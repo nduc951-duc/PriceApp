@@ -6,6 +6,8 @@ declare
   category_id bigint;
   product_id bigint;
   variant_id bigint;
+  unpriced_variant_id bigint;
+  inactive_variant_id bigint;
   source_page_id bigint;
   packaging_id bigint;
   supplier_id bigint;
@@ -28,10 +30,24 @@ begin
     product_id, 'SKU-' || txid_current()::text, 'ACL regression variant',
     'ACL regression specification', 'ACL regression variant ACL regression specification', 'verified'
   ) returning id into variant_id;
+  insert into public.product_variants (
+    product_id, sku, display_name, raw_specification, search_text, verification_status
+  ) values (
+    product_id, 'SKU-NOPRICE-' || txid_current()::text, 'ACL regression unpriced sibling',
+    'ACL regression unpriced spec', 'ACL regression product unpriced spec', 'verified'
+  ) returning id into unpriced_variant_id;
+  insert into public.product_variants (
+    product_id, sku, display_name, raw_specification, search_text, verification_status
+  ) values (
+    product_id, 'SKU-INACTIVE-' || txid_current()::text, 'ACL regression inactive sibling',
+    'ACL regression inactive spec', 'ACL regression product inactive spec', 'verified'
+  ) returning id into inactive_variant_id;
+  update public.product_variants set active = false where id = inactive_variant_id;
   insert into public.source_pages (page_number, storage_path, verification_status)
     values (987, fixture_key || '.jpg', 'verified') returning id into source_page_id;
   insert into public.variant_sources (variant_id, source_page_id)
     values (variant_id, source_page_id);
+  insert into public.variant_sources (variant_id, source_page_id) values (unpriced_variant_id, source_page_id);
   insert into public.packaging_options (variant_id, name, quantity, base_unit)
     values (variant_id, 'ACL regression pack', 4, 'piece') returning id into packaging_id;
   insert into public.suppliers (name)
@@ -39,7 +55,16 @@ begin
   insert into public.price_lists (supplier_id, name, effective_date)
     values (supplier_id, 'ACL regression list', current_date) returning id into price_list_id;
   insert into public.prices (packaging_id, price_list_id, price_type, amount)
-    values (packaging_id, price_list_id, 'retail', 12345) returning id into price_id;
+    values (packaging_id, price_list_id, 'retail', 12345) returning id into price_id;  insert into public.prices (packaging_id, price_list_id, price_type, amount)
+    values (packaging_id, price_list_id, 'dealer', 11111);
+  insert into public.price_lists (supplier_id, name, effective_date, is_sample)
+    values (supplier_id, 'ACL regression sample list', current_date, true) returning id into price_list_id;
+  insert into public.prices (packaging_id, price_list_id, price_type, amount)
+    values (packaging_id, price_list_id, 'retail', 22222);
+  insert into public.price_lists (supplier_id, name, effective_date)
+    values (supplier_id, 'ACL regression expired list', current_date - 5) returning id into price_list_id;
+  insert into public.prices (packaging_id, price_list_id, price_type, amount, valid_from, valid_to)
+    values (packaging_id, price_list_id, 'retail', 33333, now() - interval '5 days', now() - interval '1 day');
 
   select state.active_generation into active_generation
   from public.rag_index_state state where state.id = true;
@@ -70,7 +95,8 @@ begin
     'public.search_public_rag_catalog(text,integer)',
     'public.match_public_rag_chunks(extensions.vector,text,integer)',
     'public.current_public_rag_variant_sources(bigint[])',
-    'public.get_public_rag_catalog(bigint[])'
+    'public.get_public_rag_catalog(bigint[])',
+    'public.list_public_rag_product_variants(bigint[])'
   ] loop
     function_oid := to_regprocedure(signature);
     if function_oid is null then raise exception 'public RAG RPC is missing: %', signature; end if;
@@ -134,6 +160,12 @@ begin
   if position('verification_status' in function_source) = 0 or position('not pl.is_sample' in function_source) = 0 then
     raise exception 'public price RPC no longer restricts rows to the public catalog';
   end if;
+  function_source := lower(pg_get_functiondef('public.list_public_rag_product_variants(bigint[])'::regprocedure));
+  if position('verification_status' in function_source) = 0
+     or position('not pl.is_sample' in function_source) = 0
+     or position('security definer' in function_source) = 0 then
+    raise exception 'public variant-group RPC no longer restricts rows to verified public catalog data';
+  end if;
 end $$;
 
 set local role anon;
@@ -155,6 +187,41 @@ begin
     select 1 from public.get_public_rag_catalog(array[expected_variant_id]) catalog
     where catalog.variant_id = expected_variant_id and catalog.price_id = expected_price_id and catalog.price_amount = 12345
   ) then raise exception 'anon could not retrieve the current verified price'; end if;
+  if not exists (
+    select 1 from public.list_public_rag_product_variants(array[expected_variant_id]) variants
+    where variants.variant_id = expected_variant_id
+      and variants.price_id = expected_price_id and variants.price_amount = 12345
+      and variants.unit = 'piece' and variants.package_quantity = 4
+      and variants.source_pages = array[987]::integer[]
+      and 'acl regression alias' = any(variants.product_aliases)
+  ) then raise exception 'public variant-group RPC omitted the exact price, package, source, or product alias'; end if;  if (select count(distinct variant_id) from public.list_public_rag_product_variants(array[expected_variant_id])) <> 2 then
+    raise exception 'public variant-group RPC did not include exactly both active verified siblings';
+  end if;
+  if not exists (
+    select 1 from public.list_public_rag_product_variants(array[expected_variant_id]) variants
+    where variants.variant_id <> expected_variant_id and variants.price_id is null
+      and variants.display_name = 'ACL regression unpriced sibling'
+  ) then raise exception 'public variant-group RPC omitted the verified sibling without a current price'; end if;
+  if exists (
+    select 1 from public.list_public_rag_product_variants(array[expected_variant_id]) variants
+    where variants.display_name = 'ACL regression inactive sibling'
+  ) then raise exception 'public variant-group RPC included an inactive variant'; end if;
+  if exists (
+    select 1 from public.list_public_rag_product_variants(array[expected_variant_id]) variants
+    where variants.price_type not in ('retail', 'wholesale')
+  ) then raise exception 'public variant-group RPC exposed an ineligible price tier'; end if;  if exists (
+    select 1 from public.list_public_rag_product_variants(array[expected_variant_id]) variants
+    where variants.price_amount in (11111, 22222, 33333)
+  ) then raise exception 'public variant-group RPC exposed dealer, sample, or expired pricing'; end if;
+  if exists (select 1 from public.list_public_rag_product_variants(array[]::bigint[])) then
+    raise exception 'public variant-group RPC accepted an empty seed array';
+  end if;
+  if exists (select 1 from public.list_public_rag_product_variants(array[1,2,3,4,5,6,7,8,9]::bigint[])) then
+    raise exception 'public variant-group RPC accepted more than eight seeds';
+  end if;
+  if exists (select 1 from public.list_public_rag_product_variants(array[999999999999::bigint])) then
+    raise exception 'public variant-group RPC accepted an unknown seed';
+  end if;
   if not exists (
     select 1 from public.get_public_customer_catalog()
     where product_code like 'SKU-%'
@@ -181,6 +248,53 @@ begin
 end $$;
 reset role;
 
+-- SQL remains authoritative even when the previously indexed chunk has not
+-- been replaced yet. Neither price nor package unit may come from that chunk.
+update public.prices set amount = 54321
+where id = current_setting('test.acl_regression_price_id')::bigint;
+update public.packaging_options set base_unit = 'set'
+where id = (select packaging_id from public.prices
+  where id = current_setting('test.acl_regression_price_id')::bigint);
+
+set local role anon;
+do $$
+declare
+  variant bigint := current_setting('test.acl_regression_variant_id')::bigint;
+begin
+  if not exists (select 1 from public.get_public_rag_catalog(array[variant])
+      where price_id = current_setting('test.acl_regression_price_id')::bigint
+        and price_amount = 54321 and unit = 'set') then
+    raise exception 'public price lookup returned stale SQL price or package unit';
+  end if;
+  if not exists (select 1 from public.list_public_rag_product_variants(array[variant])
+      where price_id = current_setting('test.acl_regression_price_id')::bigint
+        and price_amount = 54321 and unit = 'set') then
+    raise exception 'public group lookup returned stale SQL price or package unit';
+  end if;
+end $$;
+reset role;
+
+update public.product_variants set verification_status = 'needs_review'
+where id = current_setting('test.acl_regression_variant_id')::bigint;
+
+set local role anon;
+do $$
+declare
+  variant bigint := current_setting('test.acl_regression_variant_id')::bigint;
+begin
+  if exists (select 1 from public.get_public_rag_catalog(array[variant]))
+    or exists (select 1 from public.current_public_rag_variant_sources(array[variant]))
+    or exists (select 1 from public.list_public_rag_product_variants(array[variant]))
+    or exists (select 1 from public.search_public_rag_catalog('ACL regression variant', 8)
+      where id = variant)
+    or exists (select 1 from public.match_public_rag_chunks(
+        array_fill(0::real, array[1024])::extensions.vector(1024), 'acl-regression-model', 8)
+      where product_variant_id = variant) then
+    raise exception 'unverified variant or its old indexed evidence remained public';
+  end if;
+end $$;
+reset role;
+
 set local role authenticated;
 do $$
 begin
@@ -195,6 +309,9 @@ begin
   exception when insufficient_privilege then null; end;
   begin perform 1 from public.get_public_rag_catalog(array[1::bigint]);
     raise exception 'authenticated executed get_public_rag_catalog';
+  exception when insufficient_privilege then null; end;
+  begin perform 1 from public.list_public_rag_product_variants(array[1::bigint]);
+    raise exception 'authenticated executed list_public_rag_product_variants';
   exception when insufficient_privilege then null; end;
 end $$;
 reset role;

@@ -21,26 +21,55 @@ function fixture(role = "viewer", authResult?: { data: { user: { id: string } | 
   return { app: buildApp({ env, supabaseFactory: factory }), dataAccess };
 }
 
+function publicPriceFixture() {
+  const rpc = vi.fn(async (name: string, args?: Record<string, unknown>) => {
+    const query = String(args?.p_query ?? "").toLocaleLowerCase("vi-VN");
+    const wheel = query.includes("bánh xe") || query.includes("banh xe");
+    const productName = wheel ? "Bánh xe" : "Tắc kê sắt";
+    const variant = wheel ? "Đỏ mận khóa 1T2" : "6x50";
+    const amount = wheel ? 94000 : 34000;
+    if (name === "search_public_rag_catalog") return { data: [{ id: 1, result_type: "variant", relevance: 99 }], error: null };
+    if (name === "current_public_rag_variant_sources") return { data: [{ product_variant_id: 1, source_page_id: 11, page_number: 11 }], error: null };
+    if (name === "get_public_rag_catalog") return { data: [{
+      variant_id: 1, display_name: variant, raw_specification: variant, verification_status: "verified",
+      product_name: productName, category_name: productName, source_pages: [11], packaging_id: 5,
+      packaging_name: "Bánh", package_quantity: 1, unit: "cái", package_note: "", price_id: 10,
+      price_version: 2, price_amount: amount, price_type: "retail", minimum_quantity: 1,
+      price_list_name: "Bảng giá hiện hành", supplier_name: "Cửa hàng",
+    }], error: null };
+    throw new Error(`Unexpected public RPC ${name}`);
+  });
+  const factory = (() => ({
+    auth: { getUser: async () => ({ data: { user: null }, error: null }) },
+    from: () => { throw new Error("Public price lookup must use RPCs"); },
+    rpc,
+  })) as SupabaseFactory;
+  return { app: buildApp({ env, supabaseFactory: factory }), rpc };
+}
+
 describe("versioned RAG route boundaries", () => {
-  it("allows an unauthenticated public price question without opening the staff endpoint", async () => {
+  it("answers a public exact price without requiring embedding", async () => {
     vi.stubEnv("RAG_EMBEDDING_MODEL", "");
-    const { app } = fixture();
+    const { app, rpc } = publicPriceFixture();
     try {
-      const response = await app.inject({ method: "POST", url: "/api/v1/public/rag/query", payload: { question: "Giá tắc kê sắt 6x50?" } });
-      expect(response.statusCode).toBe(503);
-      expect(response.json()).toMatchObject({ error: { code: "RAG_UNAVAILABLE" } });
+      const response = await app.inject({ method: "POST", url: "/api/v1/public/rag/query", payload: { question: "Gi\u00e1 t\u1eafc k\u00ea s\u1eaft 6x50?" } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ status: "answered", items: [{ prices: [{ amount: 34000 }] }] });
+      expect(rpc.mock.calls.map(([name]) => name)).not.toContain("match_public_rag_chunks");
     } finally { await app.close(); vi.unstubAllEnvs(); }
   });
 
-  it("accepts prior question context for a guest clarification reply", async () => {
+  it("accepts prior question context and asks safely when the planner is unavailable", async () => {
     vi.stubEnv("RAG_EMBEDDING_MODEL", "");
-    const { app } = fixture();
+    const { app } = publicPriceFixture();
     try {
       const response = await app.inject({ method: "POST", url: "/api/v1/public/rag/query", payload: {
-        question: "Giá 1T2", previousQuestion: "Bánh xe giá bao nhiêu?",
+        question: "Gi\u00e1 1T2", previousQuestion: "B\u00e1nh xe gi\u00e1 bao nhi\u00eau?",
       } });
-      expect(response.statusCode).toBe(503);
-      expect(response.json()).toMatchObject({ error: { code: "RAG_UNAVAILABLE" } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ items: [], sources: [] });
+      expect(["clarify", "insufficient_evidence"]).toContain(response.json().status);
+      expect(response.body).not.toContain("94000");
     } finally { await app.close(); vi.unstubAllEnvs(); }
   });
 
@@ -54,7 +83,7 @@ describe("versioned RAG route boundaries", () => {
     } finally { await app.close(); }
   });
 
-  it.each([...adminEndpoints, { method: "POST", url: "/api/v1/rag/query" }, { method: "POST", url: "/api/v1/admin/rag/preview" }] as const)("requires auth for $method $url", async endpoint => {
+  it.each([...adminEndpoints, { method: "POST", url: "/api/v1/rag/query" }] as const)("requires auth for $method $url", async endpoint => {
     const { app } = fixture();
     try {
       const response = await app.inject(endpoint);
@@ -82,22 +111,12 @@ describe("versioned RAG route boundaries", () => {
     } finally { await app.close(); }
   });
 
-  it("rejects unsupported OCR image types before calling the model", async () => {
-    const { app, dataAccess } = fixture("viewer");
+  it.each(["ocr", "preview", "pages"])("removes the %s feature without touching data", async (feature) => {
+    const { app, dataAccess } = fixture("owner");
     try {
-      const response = await app.inject({ method: "POST", url: "/api/v1/admin/rag/ocr", headers: { authorization: `Bearer ${token()}` }, payload: { imageBase64: "QUJDREVGR0hJSktMTU4=", mimeType: "image/gif" } });
-      expect(response.statusCode).toBe(400);
-      expect(response.json()).toMatchObject({ error: { code: "INVALID_INPUT" } });
+      const response = await app.inject({ method: feature === "pages" ? "GET" : "POST", url: `/api/v1/admin/rag/${feature}`, headers: { authorization: `Bearer ${token()}` } });
+      expect(response.statusCode).toBe(404);
       expect(dataAccess).not.toHaveBeenCalled();
-    } finally { await app.close(); }
-  });
-
-  it("allows a signed-in viewer to preview OCR text as chunks", async () => {
-    const { app } = fixture("viewer");
-    try {
-      const response = await app.inject({ method: "POST", url: "/api/v1/admin/rag/preview", headers: { authorization: `Bearer ${token()}` }, payload: { extractedText: "Tắc kê sắt:\n6 x 50 | 12" } });
-      expect(response.statusCode).toBe(200);
-      expect(response.json().chunks).toHaveLength(1);
     } finally { await app.close(); }
   });
 
@@ -115,7 +134,7 @@ describe("versioned RAG route boundaries", () => {
   it("returns a safe structured error when a caller-scoped repository fails", async () => {
     const { app } = fixture("owner");
     try {
-      const response = await app.inject({ method: "GET", url: "/api/v1/admin/rag/pages", headers: { authorization: `Bearer ${token()}` } });
+      const response = await app.inject({ method: "GET", url: "/api/v1/admin/rag/index", headers: { authorization: `Bearer ${token()}` } });
       expect(response.statusCode).toBe(500);
       expect(response.json()).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error" }, requestId: response.headers["x-request-id"] });
       expect(response.body).not.toMatch(/private-token|raw-OCR|user-id/);
@@ -125,7 +144,7 @@ describe("versioned RAG route boundaries", () => {
   it("rejects malformed JSON with a safe client error", async () => {
     const { app } = fixture("owner");
     try {
-      const response = await app.inject({ method: "POST", url: "/api/v1/admin/rag/preview", headers: { authorization: `Bearer ${token()}`, "content-type": "application/json" }, payload: '{"extractedText":private-secret' });
+      const response = await app.inject({ method: "POST", url: "/api/v1/rag/query", headers: { authorization: `Bearer ${token()}`, "content-type": "application/json" }, payload: '{"extractedText":private-secret' });
       expect(response.statusCode).toBe(400);
       expect(response.json()).toMatchObject({ error: { code: "INVALID_INPUT" } });
       expect(response.body).not.toContain("private-secret");
@@ -142,13 +161,13 @@ describe("versioned RAG route boundaries", () => {
     } finally { await app.close(); }
   });
 
-  it("returns safe unavailability when query embedding configuration is missing", async () => {
+  it("uses a safe response when query embedding configuration is missing", async () => {
     vi.stubEnv("RAG_EMBEDDING_MODEL", "");
     const { app } = fixture();
     try {
       const response = await app.inject({ method: "POST", url: "/api/v1/rag/query", headers: { authorization: `Bearer ${token()}` }, payload: { question: "Giá vật tư?" } });
-      expect(response.statusCode).toBe(503);
-      expect(response.json()).toMatchObject({ error: { code: "RAG_UNAVAILABLE" } });
+      expect(response.statusCode).toBe(200);
+      expect(["clarify", "insufficient_evidence"]).toContain(response.json().status);
       expect(response.body).not.toContain("RAG_EMBEDDING_MODEL");
     } finally { await app.close(); vi.unstubAllEnvs(); }
   });
@@ -156,14 +175,11 @@ describe("versioned RAG route boundaries", () => {
   it("returns diagnostic 503 health details through the declared response schema", async () => {
     vi.stubEnv("RAG_EMBEDDING_MODEL", "");
     vi.stubEnv("RAG_CHAT_MODEL", "");
-    const dataAccess = vi.fn();
     const factory = (() => ({
       auth: { getUser: async () => ({ data: { user: { id: "user-id" } }, error: null }) },
       from: (table: string) => table === "profiles"
         ? { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: "owner" }, error: null }) }) }) }
-        : table === "rag_page_texts"
-          ? { select: () => ({ eq: async () => ({ count: 0, error: { message: "db unavailable" } }) }) }
-          : { select: async () => ({ count: 0, error: { message: "db unavailable" } }) },
+        : { select: async () => ({ count: 0, error: { message: "db unavailable" } }) },
     })) as SupabaseFactory;
     const app = buildApp({ env, supabaseFactory: factory });
     try {

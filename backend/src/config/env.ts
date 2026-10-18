@@ -4,6 +4,7 @@ const schema = z.object({
   SUPABASE_URL: z.url(),
   SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
   CUSTOMER_ORDER_HMAC_SECRET: z.string().min(32).optional(),
+  RAG_FEEDBACK_HMAC_SECRET: z.string().min(32).optional(),
   RAG_WORKER_EMAIL: z.preprocess(value => value === "" ? undefined : value, z.email().optional()),
   RAG_WORKER_PASSWORD: z.preprocess(value => value === "" ? undefined : value, z.string().min(1).optional()),
   FRONTEND_ORIGINS: z.string().min(1),
@@ -14,6 +15,7 @@ export type AppEnv = {
   supabaseUrl: string;
   supabasePublishableKey: string;
   customerOrderHmacSecret?: string;
+  ragFeedbackHmacSecret?: string;
   ragWorker?: { email: string; password: string };
   allowedOrigins: string[];
   port: number;
@@ -36,6 +38,7 @@ export function readEnv(input: NodeJS.ProcessEnv = process.env): AppEnv {
     supabaseUrl: parsed.SUPABASE_URL,
     supabasePublishableKey: parsed.SUPABASE_PUBLISHABLE_KEY,
     ...(parsed.CUSTOMER_ORDER_HMAC_SECRET ? { customerOrderHmacSecret: parsed.CUSTOMER_ORDER_HMAC_SECRET } : {}),
+    ...(parsed.RAG_FEEDBACK_HMAC_SECRET ? { ragFeedbackHmacSecret: parsed.RAG_FEEDBACK_HMAC_SECRET } : {}),
     ...(parsed.RAG_WORKER_EMAIL && parsed.RAG_WORKER_PASSWORD
       ? { ragWorker: { email: parsed.RAG_WORKER_EMAIL, password: parsed.RAG_WORKER_PASSWORD } }
       : {}),

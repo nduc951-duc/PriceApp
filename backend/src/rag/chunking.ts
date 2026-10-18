@@ -1,9 +1,8 @@
 export type TextChunk = { index: number; content: string; start: number; end: number };
-export type RagChunkSettings = { maxCharacters: number; overlapCharacters: number };
-export type RecordChunk = TextChunk & { heading: string | null };
-export const CHUNKER_VERSION = "records-1100-overlap160-v3";
+export const CHUNKER_VERSION = "catalog-1100-overlap160-v5";
 
-export const DEFAULT_CHUNK_SETTINGS: RagChunkSettings = { maxCharacters: 1_100, overlapCharacters: 160 };
+const MAX_CHUNK_CHARACTERS = 1_100;
+const OVERLAP_CHARACTERS = 160;
 
 /** Canonical text used by chunk offsets and the review preview. */
 export function normalizeChunkSource(input: string): string {
@@ -11,11 +10,11 @@ export function normalizeChunkSource(input: string): string {
     .split("\n").map((line) => line.trim()).filter(Boolean).join("\n");
 }
 
-/** Splits reviewed page text on line/sentence boundaries, then adds a small overlap. */
+/** Splits a verified catalog summary on line/sentence boundaries with a small overlap. */
 export function chunkText(
   input: string,
-  chunkChars = DEFAULT_CHUNK_SETTINGS.maxCharacters,
-  overlapChars = DEFAULT_CHUNK_SETTINGS.overlapCharacters,
+  chunkChars = MAX_CHUNK_CHARACTERS,
+  overlapChars = OVERLAP_CHARACTERS,
 ): TextChunk[] {
   if (!Number.isInteger(chunkChars) || chunkChars < 200) throw new Error("chunkChars must be at least 200");
   if (!Number.isInteger(overlapChars) || overlapChars < 0 || overlapChars >= chunkChars) {
@@ -79,30 +78,5 @@ export function chunkText(
     currentEnd = unit.end;
   }
   push();
-  return chunks;
-}
-
-/** Keeps each OCR line as a product/record unit and carries explicit headings forward. */
-export function chunkRecords(input: string, settings: RagChunkSettings = DEFAULT_CHUNK_SETTINGS): RecordChunk[] {
-  const { maxCharacters, overlapCharacters } = settings;
-  if (!Number.isInteger(maxCharacters) || maxCharacters < 200 || maxCharacters > 4_000) throw new Error("maxCharacters must be between 200 and 4000");
-  if (!Number.isInteger(overlapCharacters) || overlapCharacters < 0 || overlapCharacters >= maxCharacters) throw new Error("overlapCharacters must be smaller than maxCharacters");
-  const source = normalizeChunkSource(input);
-  const chunks: RecordChunk[] = [];
-  let heading: string | null = null;
-  for (const line of source.matchAll(/[^\n]+/g)) {
-    const value = line[0];
-    if (/^.{1,90}:$/.test(value.trim())) {
-      heading = value.trim().slice(0, -1);
-      continue;
-    }
-    const pieces = value.length <= maxCharacters
-      ? [{ start: line.index, end: line.index + value.length }]
-      : chunkText(value, maxCharacters, overlapCharacters).map((piece) => ({ start: line.index + piece.start, end: line.index + piece.end }));
-    for (const piece of pieces) {
-      const content = source.slice(piece.start, piece.end).trim();
-      if (content) chunks.push({ index: chunks.length, content, start: piece.start, end: piece.end, heading });
-    }
-  }
   return chunks;
 }

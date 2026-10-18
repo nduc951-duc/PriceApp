@@ -10,6 +10,7 @@ declare module "fastify" {
   interface FastifyInstance {
     publicSupabaseFactory: SupabaseFactory;
     customerOrderHmacSecret?: string;
+    ragFeedbackHmacSecret?: string;
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<AuthContext>;
     requireRole: (...roles: import("../services/auth.service.js").AppRole[]) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }

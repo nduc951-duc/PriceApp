@@ -1,3 +1,24 @@
+# Trợ lý vật tư: nhóm đánh giá theo epic
+
+`backend/testdata/rag-assistant-cases.json` là bộ câu hỏi ứng viên cho các intent hỏi giá, liệt kê, thông tin sản phẩm, tư vấn, so sánh, câu hỏi nhiều ý, ngoài phạm vi và cần làm rõ. Các dòng hiện mang nhãn `candidate`: chưa có đáp án chuẩn vì cần đối chiếu corpus được duyệt, catalog hiện hành và chuyên môn sử dụng vật tư. Runner cố ý không tính candidate như kết quả đã kiểm chứng.
+
+| User story | Nhóm case | Bằng chứng/đo lường |
+| :--- | :--- | :--- |
+| US-01 Intent | hỏi giá, liệt kê, thông tin, tư vấn, so sánh, nhiều ý, ngoài phạm vi, làm rõ | intent accuracy và đáp án theo intent |
+| US-02 Complete listing | danh sách quy cách, có/không có giá | tập variant chuẩn, tổng số, precision, recall, completeness |
+| US-03 Product identity | có dấu/không dấu, tên gọi và quy cách | variant correctness sau khi đối chiếu catalog |
+| US-04 Grounded facts | đặc điểm và trang nguồn | citation correctness trên nguồn đã duyệt |
+| US-05 Current price | giá hiện hành, đơn vị, đổi giá | price ID/version/amount/tier/unit phải khớp SQL tại thời điểm chạy |
+| US-06 Advice clarification | thiếu môi trường/kích thước/điều kiện | yêu cầu làm rõ và căn cứ tư vấn |
+| US-07 Recommendations | gợi ý có điều kiện sử dụng | người có chuyên môn duyệt tính phù hợp |
+| US-08 Comparisons | hai mặt hàng/quy cách được xác nhận | chỉ so sánh trường có bằng chứng |
+| US-09 Follow-ups | tham chiếu tới lượt trước và giá mới | resolve đúng ID, truy vấn lại trạng thái và giá SQL |
+| US-10 Roles | customer/staff | RPC, RLS, dữ liệu phù hợp vai trò |
+| US-11 Feedback | lý do phản hồi và trace liên quan | bản ghi gắn đúng câu hỏi/đáp án, không lộ dữ liệu riêng |
+| US-12 Evaluation | toàn bộ nhóm trên | metric tách theo intent, citation, độ chính xác, completeness và latency |
+
+Mẫu hỏi cũ bên dưới vẫn là bộ L1 kiểm thử candidate. Không tự thêm amount hoặc kết quả quan sát vào câu hỏi; chỉ ghi đáp án chuẩn sau khi đối chiếu nguồn có thẩm quyền. Mỗi lần chạy cần lưu model/corpus fingerprint và kết quả quan sát riêng để phân biệt ground truth với output đo được.
+
 # L1 · 20 câu hỏi thử nghiệm đầu tiên
 
 Đây là **bộ câu hỏi ứng viên** lấy từ tên/quy cách trong migration catalog 13 trang. Người phụ trách cần đối chiếu ảnh gốc, trạng thái `verified` và bản chép `approved` trước khi khóa đáp án chuẩn. Không chép số tiền vào bộ câu hỏi: mỗi lần chạy lấy `prices.id`, `prices.amount` và hiệu lực từ SQL tại thời điểm hỏi.
@@ -28,3 +49,7 @@
 ## Mẫu ghi kết quả mỗi lần chạy
 
 `run_id`, thời điểm, trạng thái duyệt trang, model/fingerprint, câu hỏi, chunk IDs và source revision, variant IDs, price IDs, amount SQL, câu trả lời, trang trích dẫn, đúng/sai, ghi chú. Chưa có lần chạy thật thì để trống; không tự điền kết quả mong muốn thành kết quả đo được.
+
+## Added epic coverage (candidate-only)
+
+The evaluation set now includes `assistant-advice-missing-constraints-01`, `assistant-advice-document-constraint-01`, `assistant-comparison-missing-dimension-01`, and `assistant-comparison-documented-dimension-01`. These cases cover clarification before advice, citation of each requested use constraint, asking for a comparison dimension, and comparing only a dimension documented for both variants. They remain candidates until the approved corpus and product expertise are used to adjudicate them; no expected prices or outcomes were invented.

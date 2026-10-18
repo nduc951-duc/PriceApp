@@ -4,7 +4,7 @@ export interface CatalogFilterCandidate {
   productName: string;
   variant: string;
   aliases?: string[];
-  packages: Array<{ name: string; unit: string; activeTiers: PriceTier[] }>;
+  packages: Array<{ name: string; quantity?: number; unit: string; activeTiers: PriceTier[] }>;
 }
 
 function normalizedTokens(value: string): string[] {
@@ -69,6 +69,15 @@ export function matchesExplicitPackage(
   question: string,
 ): boolean {
   const parsedQuestion = understandQuery(question);
+  const requestedPackageContent = parsedQuestion.package?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("vi")
+    .match(/(\d+(?:[.,]\d+)?)\s*(kg|g|met|m|cm|mm|lit|l|cai|con|tam|cay|bich|bo|cuon|hop|thung|goi)\b/u);
+  if (requestedPackageContent && candidate.quantity !== undefined) {
+    const requestedQuantity = Number(requestedPackageContent[1]?.replace(",", "."));
+    const requestedUnit = requestedPackageContent[2];
+    const normalizedUnit = candidate.unit.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("vi");
+    if (requestedQuantity !== candidate.quantity || requestedUnit !== normalizedUnit) return false;
+    return !parsedQuestion.tier || candidate.activeTiers.includes(parsedQuestion.tier);
+  }
   const explicitUnit = parsedQuestion.package ? undefined : parsedQuestion.unit;
   return matchesHardFilters({
     package: candidate.name,

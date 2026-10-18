@@ -1,3 +1,5 @@
+> Cập nhật 2026-10-18: tài liệu này ghi lại thiết kế/trạng thái cũ có luồng OCR. Ứng dụng hiện chỉ dùng catalog Supabase đã xác minh; xem [RAG_SETUP.md](../RAG_SETUP.md) và migration 202610180009_catalog_only_rag.sql để biết hành vi hiện hành.
+
 # L3 · Trạng thái quản trị nguồn và preview chunk
 
 ## Đã triển khai trong code ngày 10/10/2026

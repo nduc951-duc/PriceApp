@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comparisonTargets, matchesExplicitQuery, matchesNamedCandidate } from "./candidate-filters.js";
+import { comparisonTargets, matchesExplicitPackage, matchesExplicitQuery, matchesNamedCandidate } from "./candidate-filters.js";
 
 describe("candidate filtering for specification codes", () => {
   it("does not match a longer code when the question names a shorter code", () => {
@@ -10,6 +10,14 @@ describe("candidate filtering for specification codes", () => {
   it("matches the exact named code", () => {
     const candidate = { productName: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T", packages: [{ name: "1 bánh/cái", unit: "bánh", activeTiers: ["retail"] as const }] };
     expect(matchesExplicitQuery(candidate, "Giá bánh xe Đỏ mận khóa ĐL 1T")).toBe(true);
+  });
+
+  it("matches a package by quantity and unit when the container word differs", () => {
+    const tenPerBag = { name: "10 con/bịch", quantity: 10, unit: "con", activeTiers: ["retail"] as const };
+    const ninetyFivePerBag = { name: "95 con/bịch", quantity: 95, unit: "con", activeTiers: ["wholesale"] as const };
+
+    expect(matchesExplicitPackage(tenPerBag, "Giá tắc kê sắt 8x100 gói 10 con?")).toBe(true);
+    expect(matchesExplicitPackage(ninetyFivePerBag, "Giá tắc kê sắt 8x100 gói 10 con?")).toBe(false);
   });
 
   it("rejects an unrelated catalog candidate for an out-of-catalog product question", () => {

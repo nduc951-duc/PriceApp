@@ -1,4 +1,4 @@
-export type CitationEvidenceKind = "approved_page_ocr" | "verified_catalog";
+export type CitationEvidenceKind = "verified_catalog";
 
 export type CitationSourceSpan = { start: number; end: number };
 
@@ -18,7 +18,7 @@ export type RetrievedChunkEvidence = {
 };
 
 export type RagCitation = {
-  pageNumber: number;
+  pageNumber: number | null;
   chunkId: number;
   chunkKey: string;
   sourceRevision: number | null;
@@ -41,23 +41,21 @@ const isValidSpan = (span: CitationSourceSpan | null | undefined): span is Citat
 export function buildCitations(evidence: readonly RetrievedChunkEvidence[]): RagCitation[] {
   const citations: RagCitation[] = [];
   for (const item of evidence) {
-    if (item.evidenceKind !== "approved_page_ocr" && item.evidenceKind !== "verified_catalog") continue;
-    const isOcrEvidence = item.evidenceKind === "approved_page_ocr";
-    const isCatalogEvidence = item.evidenceKind === "verified_catalog";
-    if (!isPositiveId(item.pageNumber)
+    if (item.evidenceKind !== "verified_catalog") continue;
+    if ((item.pageNumber !== null && item.pageNumber !== undefined && !isPositiveId(item.pageNumber))
       || !isPositiveId(item.chunkId)
       || typeof item.chunkKey !== "string" || !item.chunkKey.trim()
       || typeof item.excerpt !== "string" || !item.excerpt.trim()
-      || (isOcrEvidence && (!isPositiveId(item.sourceRevision) || !isValidSpan(item.sourceSpan)))
-      || (isCatalogEvidence && item.sourceRevision !== null && item.sourceRevision !== undefined && !isPositiveId(item.sourceRevision))
-      || (isCatalogEvidence && item.sourceSpan !== null && item.sourceSpan !== undefined && !isValidSpan(item.sourceSpan))
+      || (item.sourceRevision !== null && item.sourceRevision !== undefined && !isPositiveId(item.sourceRevision))
+      || (item.sourceSpan !== null && item.sourceSpan !== undefined && !isValidSpan(item.sourceSpan))
+      || (item.pageNumber == null && !isPositiveId(item.verifiedVariantId))
       || (item.verifiedVariantId !== undefined && item.verifiedVariantId !== null && !isPositiveId(item.verifiedVariantId))
       || (item.verifiedPriceId !== undefined && item.verifiedPriceId !== null && !isPositiveId(item.verifiedPriceId))) {
       continue;
     }
 
     const citation: RagCitation = {
-      pageNumber: item.pageNumber,
+      pageNumber: item.pageNumber ?? null,
       chunkId: item.chunkId,
       chunkKey: item.chunkKey,
       sourceRevision: isPositiveId(item.sourceRevision) ? item.sourceRevision : null,

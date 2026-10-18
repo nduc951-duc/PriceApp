@@ -18,6 +18,10 @@ export function submitPublicCustomerOrder(body: Omit<OrderSubmission, "website">
   return requestPublicApi("/api/v1/public/order-requests", { method: "POST", body: JSON.stringify(body) });
 }
 
+export function submitStaffCustomerOrder(body: Omit<OrderSubmission, "website">): Promise<OrderReceipt> {
+  return requestApi("/api/v1/customer-order-requests", { method: "POST", body: JSON.stringify(body) });
+}
+
 export function fetchCustomerOrderRequests(): Promise<OrderRequests> {
   return requestApi("/api/v1/customer-order-requests");
 }

@@ -25,7 +25,8 @@ export function mapCatalogRows(rows: VariantRow[], now = Date.now()): Pick<Catal
     const spec = variant.raw_specification ?? variant.display_name;
     const common = { categoryId: variant.products?.categories?.id ?? 0, productId: variant.products?.id ?? 0,
       variantId: variant.id, name, category, productCode: variant.sku ?? null,
-      aliases: variant.products?.product_aliases?.map(({ alias }) => alias) ?? [], sourcePages, sourceFiles };
+      aliases: variant.products?.product_aliases?.map(({ alias }) => alias) ?? [], sourcePages, sourceFiles,
+      verificationStatus: variant.verification_status as CatalogPrice["status"] };
     entries.push({ ...common, spec, displayName: variant.display_name });
     for (const pack of variant.packaging_options ?? []) {
       for (const price of pack.prices ?? []) {
@@ -38,6 +39,7 @@ export function mapCatalogRows(rows: VariantRow[], now = Date.now()): Pick<Catal
           packageName: pack.name, packageQuantity: Number(pack.quantity), packageNote: pack.note ?? "",
           priceType: price.price_type, minimumQuantity: Number(price.minimum_quantity), price: Number(price.amount),
           unit: pack.base_unit, supplier: price.price_lists?.suppliers?.name ?? "Chưa rõ nhà cung cấp",
+          validFrom: price.valid_from, validTo: price.valid_to,
           status: variant.verification_status, version: price.version });
       }
     }

@@ -1,6 +1,8 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildEvaluationReport,
@@ -37,6 +39,54 @@ describe("evaluation runner inputs and options", () => {
     expect(parsed.cases.map(({ label }) => label?.status)).toEqual(["adjudicated", "candidate"]);
     expect(() => parseEvaluationInputs("{", "[]")).toThrow("cases file is not valid JSON");
     expect(() => parseEvaluationInputs("[]", '[{"caseId":"x"}]')).toThrow(/invalid observations data/);
+  });
+
+  it("keeps the question and intent on candidate cases without treating them as adjudicated", () => {
+    const parsed = parseEvaluationInputs(
+      JSON.stringify([{
+        id: "list-fasteners",
+        question: "Cửa hàng có những loại tắc kê đạn nào?",
+        intent: "catalog_list",
+        sourceId: "candidate-corpus",
+        questionFamilyId: "fastener-list",
+        label: { status: "candidate" },
+      }]),
+      "[]",
+    );
+
+    expect(parsed.cases[0]).toMatchObject({
+      question: "Cửa hàng có những loại tắc kê đạn nào?",
+      intent: "catalog_list",
+      label: { status: "candidate" },
+    });
+    expect(buildEvaluationReport(parsed).metrics?.scoredCases).toBe(0);
+  });
+
+  it("prints repeatable CLI usage without requiring observations or writing a report", () => {
+    const entry = fileURLToPath(new URL("./evaluation-runner.ts", import.meta.url));
+    const result = spawnSync(process.execPath, ["--import", "tsx", entry, "--help"], {
+      encoding: "utf8",
+      cwd: process.cwd(),
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Usage:");
+    expect(result.stdout).toContain("--observations");
+    expect(result.stderr).toBe("");
+  });
+
+  it("loads the versioned assistant cases as candidates without inventing ground truth", async () => {
+    const casesPath = fileURLToPath(new URL("../../testdata/rag-assistant-cases.json", import.meta.url));
+    const parsed = parseEvaluationInputs(await readFile(casesPath, "utf8"), "[]");
+    const intents = new Set(parsed.cases.map(({ intent }) => intent));
+
+    expect(parsed.cases).toHaveLength(17);
+    expect(intents).toEqual(new Set([
+      "price_lookup", "catalog_list", "product_info", "advice", "comparison",
+      "multi_intent", "out_of_domain", "clarification",
+    ]));
+    expect(parsed.cases.every(({ label }) => label?.status === "candidate")).toBe(true);
+    expect(buildEvaluationReport(parsed).metrics?.scoredCases).toBe(0);
   });
 
   it("requires seed and fraction together and validates deterministic split options", () => {

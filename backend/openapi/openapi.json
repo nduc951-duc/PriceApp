@@ -633,6 +633,14 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "verificationStatus": {
+                            "type": "string",
+                            "enum": [
+                              "verified",
+                              "needs_review",
+                              "unreadable"
+                            ]
                           }
                         },
                         "required": [
@@ -646,7 +654,8 @@
                           "productCode",
                           "aliases",
                           "sourcePages",
-                          "sourceFiles"
+                          "sourceFiles",
+                          "verificationStatus"
                         ]
                       }
                     },
@@ -736,6 +745,19 @@
                               "type": "string"
                             }
                           },
+                          "validFrom": {
+                            "type": "string"
+                          },
+                          "validTo": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "status": {
                             "type": "string",
                             "enum": [
@@ -772,6 +794,8 @@
                           "supplier",
                           "sourcePages",
                           "sourceFiles",
+                          "validFrom",
+                          "validTo",
                           "status",
                           "version"
                         ]
@@ -1696,6 +1720,11 @@
                     "maxLength": 24,
                     "pattern": "^[0-9+() .-]+$"
                   },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
                   "deliveryAddress": {
                     "type": "string",
                     "maxLength": 500
@@ -1743,6 +1772,7 @@
                 "required": [
                   "customerName",
                   "phone",
+                  "idempotencyKey",
                   "items"
                 ],
                 "additionalProperties": false
@@ -1836,6 +1866,10 @@
                                 "packaging": {
                                   "type": "string"
                                 },
+                                "packageQuantity": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                },
                                 "priceType": {
                                   "type": "string",
                                   "enum": [
@@ -1863,6 +1897,7 @@
                                 "productName",
                                 "variantName",
                                 "packaging",
+                                "packageQuantity",
                                 "priceType",
                                 "quantity",
                                 "unitPrice",
@@ -2138,6 +2173,376 @@
             "bearerAuth": []
           }
         ]
+      },
+      "post": {
+        "operationId": "createStaffCustomerOrder",
+        "summary": "Nhân viên tạo đơn cho khách",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "201": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "reference": {
+                      "type": "string"
+                    },
+                    "subtotal": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "pending_confirmation"
+                    },
+                    "itemCount": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "requestId",
+                    "reference",
+                    "subtotal",
+                    "status",
+                    "itemCount"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "phone": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 24,
+                    "pattern": "^[0-9+() .-]+$"
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "deliveryAddress": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "deliveryNotes": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "website": {
+                    "type": "string",
+                    "maxLength": 0
+                  },
+                  "items": {
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "priceId": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "version": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "quantity": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 10000
+                        }
+                      },
+                      "required": [
+                        "priceId",
+                        "version",
+                        "quantity"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "customerName",
+                  "phone",
+                  "idempotencyKey",
+                  "items"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/customer-order-requests/{requestId}/status": {
@@ -3998,8 +4403,140 @@
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
+                    "publicFeedbackHandle": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "answer": {
                       "type": "string"
+                    },
+                    "answerBlocks": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "narrative"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "evidenceIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "text",
+                              "evidenceIds"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "clarification"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "unresolvedFields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "evidenceIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "text",
+                              "unresolvedFields",
+                              "evidenceIds"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "comparison"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "variantIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "evidenceIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "text",
+                              "variantIds",
+                              "evidenceIds"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "recommendation"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "variantIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "evidenceIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "text",
+                              "variantIds",
+                              "evidenceIds"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
                     },
                     "items": {
                       "type": "array",
@@ -4146,9 +4683,16 @@
                         "type": "object",
                         "properties": {
                           "pageNumber": {
-                            "type": "integer",
-                            "exclusiveMinimum": 0,
-                            "maximum": 9007199254740991
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "chunkId": {
                             "type": "integer",
@@ -4201,10 +4745,7 @@
                           },
                           "evidenceKind": {
                             "type": "string",
-                            "enum": [
-                              "approved_page_ocr",
-                              "verified_catalog"
-                            ]
+                            "const": "verified_catalog"
                           },
                           "verifiedVariantId": {
                             "type": "integer",
@@ -4227,6 +4768,36 @@
                           "evidenceKind"
                         ]
                       }
+                    },
+                    "catalogPage": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "nextCursor": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "complete": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "nextCursor",
+                        "complete"
+                      ]
                     },
                     "retrieval": {
                       "type": "object",
@@ -4609,8 +5180,140 @@
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
+                    "publicFeedbackHandle": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "answer": {
                       "type": "string"
+                    },
+                    "answerBlocks": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "narrative"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "evidenceIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "text",
+                              "evidenceIds"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "clarification"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "unresolvedFields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "evidenceIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "text",
+                              "unresolvedFields",
+                              "evidenceIds"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "comparison"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "variantIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "evidenceIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "text",
+                              "variantIds",
+                              "evidenceIds"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "recommendation"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "variantIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "evidenceIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "text",
+                              "variantIds",
+                              "evidenceIds"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
                     },
                     "items": {
                       "type": "array",
@@ -4757,9 +5460,16 @@
                         "type": "object",
                         "properties": {
                           "pageNumber": {
-                            "type": "integer",
-                            "exclusiveMinimum": 0,
-                            "maximum": 9007199254740991
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "chunkId": {
                             "type": "integer",
@@ -4812,10 +5522,7 @@
                           },
                           "evidenceKind": {
                             "type": "string",
-                            "enum": [
-                              "approved_page_ocr",
-                              "verified_catalog"
-                            ]
+                            "const": "verified_catalog"
                           },
                           "verifiedVariantId": {
                             "type": "integer",
@@ -4838,6 +5545,36 @@
                           "evidenceKind"
                         ]
                       }
+                    },
+                    "catalogPage": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "nextCursor": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "complete": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "nextCursor",
+                        "complete"
+                      ]
                     },
                     "retrieval": {
                       "type": "object",
@@ -5166,12 +5903,365 @@
                   "previousQuestion": {
                     "type": "string",
                     "maxLength": 1000
+                  },
+                  "previousVariantIds": {
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
                   }
                 },
                 "required": [
                   "question"
                 ],
                 "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/rag/feedback": {
+      "post": {
+        "operationId": "submitPublicRagFeedback",
+        "summary": "Khách gửi phản hồi gắn với một câu trả lời RAG",
+        "tags": [
+          "PriceApp"
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "saved"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Yêu cầu không được xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "feedbackHandle": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "helpful": {
+                        "type": "boolean",
+                        "const": true
+                      },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "missing_data",
+                          "wrong_product_specification",
+                          "wrong_price_or_unit",
+                          "missing_or_incorrect_citation",
+                          "retrieval_or_provider_failure",
+                          "retrieval_error",
+                          "answer_error",
+                          "other"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "feedbackHandle",
+                      "helpful"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "feedbackHandle": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "helpful": {
+                        "type": "boolean",
+                        "const": false
+                      },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "missing_data",
+                          "wrong_product_specification",
+                          "wrong_price_or_unit",
+                          "missing_or_incorrect_citation",
+                          "retrieval_or_provider_failure",
+                          "retrieval_error",
+                          "answer_error",
+                          "other"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "feedbackHandle",
+                      "helpful",
+                      "reason"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
               }
             }
           }
@@ -6714,6 +7804,10 @@
                         "type": "string",
                         "enum": [
                           "missing_data",
+                          "wrong_product_specification",
+                          "wrong_price_or_unit",
+                          "missing_or_incorrect_citation",
+                          "retrieval_or_provider_failure",
                           "retrieval_error",
                           "answer_error",
                           "other"
@@ -6742,6 +7836,10 @@
                         "type": "string",
                         "enum": [
                           "missing_data",
+                          "wrong_product_specification",
+                          "wrong_price_or_unit",
+                          "missing_or_incorrect_citation",
+                          "retrieval_or_provider_failure",
                           "retrieval_error",
                           "answer_error",
                           "other"
@@ -6813,6 +7911,10 @@
                             "type": "string",
                             "enum": [
                               "missing_data",
+                              "wrong_product_specification",
+                              "wrong_price_or_unit",
+                              "missing_or_incorrect_citation",
+                              "retrieval_or_provider_failure",
                               "retrieval_error",
                               "answer_error",
                               "other"
@@ -7092,795 +8194,6 @@
         "x-required-role": [
           "owner"
         ]
-      }
-    },
-    "/api/v1/admin/rag/pages": {
-      "get": {
-        "operationId": "listRagPages",
-        "summary": "Liệt kê trang nguồn cho OCR",
-        "tags": [
-          "RAG Admin"
-        ],
-        "responses": {
-          "200": {
-            "description": "Thành công",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "pages": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "sourcePageId": {
-                            "type": "integer",
-                            "exclusiveMinimum": 0,
-                            "maximum": 9007199254740991
-                          },
-                          "pageNumber": {
-                            "anyOf": [
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "storagePath": {
-                            "type": "string"
-                          },
-                          "sourceStatus": {
-                            "type": "string"
-                          },
-                          "title": {
-                            "type": "string"
-                          },
-                          "extractedText": {
-                            "type": "string"
-                          },
-                          "reviewStatus": {
-                            "type": "string",
-                            "enum": [
-                              "draft",
-                              "approved",
-                              "rejected"
-                            ]
-                          },
-                          "revision": {
-                            "type": "integer",
-                            "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
-                          },
-                          "reviewedBy": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "reviewedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "updatedAt": {
-                            "type": "string"
-                          },
-                          "chunkSettings": {
-                            "type": "object",
-                            "properties": {
-                              "maxCharacters": {
-                                "type": "integer",
-                                "minimum": -9007199254740991,
-                                "maximum": 9007199254740991
-                              },
-                              "overlapCharacters": {
-                                "type": "integer",
-                                "minimum": -9007199254740991,
-                                "maximum": 9007199254740991
-                              }
-                            },
-                            "required": [
-                              "maxCharacters",
-                              "overlapCharacters"
-                            ]
-                          },
-                          "chunkLinks": {
-                            "type": "object",
-                            "propertyNames": {
-                              "type": "string"
-                            },
-                            "additionalProperties": {
-                              "type": "integer",
-                              "exclusiveMinimum": 0,
-                              "maximum": 9007199254740991
-                            }
-                          },
-                          "chunkCount": {
-                            "type": "integer",
-                            "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
-                          },
-                          "indexedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "indexError": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "variants": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "properties": {
-                                "id": {
-                                  "type": "integer",
-                                  "exclusiveMinimum": 0,
-                                  "maximum": 9007199254740991
-                                },
-                                "name": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "id",
-                                "name"
-                              ]
-                            }
-                          }
-                        },
-                        "required": [
-                          "sourcePageId",
-                          "pageNumber",
-                          "storagePath",
-                          "sourceStatus",
-                          "title",
-                          "extractedText",
-                          "reviewStatus",
-                          "revision",
-                          "reviewedBy",
-                          "reviewedAt",
-                          "updatedAt",
-                          "chunkSettings",
-                          "chunkLinks",
-                          "chunkCount",
-                          "indexedAt",
-                          "indexError",
-                          "variants"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "pages"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "put": {
-        "operationId": "saveRagPage",
-        "summary": "Lưu bản nháp trang nguồn",
-        "tags": [
-          "RAG Admin"
-        ],
-        "responses": {
-          "200": {
-            "description": "Thành công",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "saved": {
-                      "type": "boolean",
-                      "const": true
-                    },
-                    "reviewStatus": {
-                      "type": "string",
-                      "enum": [
-                        "draft",
-                        "approved",
-                        "rejected"
-                      ]
-                    },
-                    "revision": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    }
-                  },
-                  "required": [
-                    "saved",
-                    "reviewStatus",
-                    "revision"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "sourcePageId": {
-                    "type": "integer",
-                    "exclusiveMinimum": 0,
-                    "maximum": 9007199254740991
-                  },
-                  "title": {
-                    "type": "string"
-                  },
-                  "extractedText": {
-                    "type": "string"
-                  },
-                  "reviewStatus": {
-                    "type": "string",
-                    "enum": [
-                      "draft",
-                      "approved",
-                      "rejected"
-                    ]
-                  },
-                  "chunkSettings": {
-                    "type": "object",
-                    "properties": {
-                      "maxCharacters": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                      },
-                      "overlapCharacters": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                      }
-                    },
-                    "required": [
-                      "maxCharacters",
-                      "overlapCharacters"
-                    ]
-                  },
-                  "chunkLinks": {
-                    "type": "object",
-                    "propertyNames": {
-                      "type": "string"
-                    },
-                    "additionalProperties": {
-                      "type": "integer",
-                      "exclusiveMinimum": 0,
-                      "maximum": 9007199254740991
-                    }
-                  }
-                },
-                "required": [
-                  "sourcePageId",
-                  "title",
-                  "extractedText",
-                  "reviewStatus",
-                  "chunkSettings",
-                  "chunkLinks"
-                ]
-              }
-            }
-          }
-        }
       }
     },
     "/api/v1/admin/rag/index": {
@@ -8937,6 +9250,27 @@
                             },
                             "count": {
                               "type": "number"
+                            },
+                            "catalogVariants": {
+                              "type": "number"
+                            },
+                            "embeddedVariants": {
+                              "type": "number"
+                            },
+                            "missingVariants": {
+                              "type": "number"
+                            },
+                            "activeGeneration": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             }
                           },
                           "required": [
@@ -9296,6 +9630,27 @@
                                 },
                                 "count": {
                                   "type": "number"
+                                },
+                                "catalogVariants": {
+                                  "type": "number"
+                                },
+                                "embeddedVariants": {
+                                  "type": "number"
+                                },
+                                "missingVariants": {
+                                  "type": "number"
+                                },
+                                "activeGeneration": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 }
                               },
                               "required": [
@@ -9444,660 +9799,6 @@
         "x-required-role": [
           "owner"
         ]
-      }
-    },
-    "/api/v1/admin/rag/preview": {
-      "post": {
-        "operationId": "previewRagPage",
-        "summary": "Xem trước phân đoạn văn bản OCR",
-        "tags": [
-          "RAG Admin"
-        ],
-        "responses": {
-          "200": {
-            "description": "Thành công",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "source": {
-                      "type": "string"
-                    },
-                    "chunks": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "index": {
-                            "type": "number"
-                          },
-                          "content": {
-                            "type": "string"
-                          },
-                          "heading": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "start": {
-                            "type": "number"
-                          },
-                          "end": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "index",
-                          "content",
-                          "heading",
-                          "start",
-                          "end"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "source",
-                    "chunks"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "extractedText": {
-                    "type": "string",
-                    "maxLength": 100000
-                  },
-                  "chunkSettings": {
-                    "type": "object",
-                    "properties": {
-                      "maxCharacters": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                      },
-                      "overlapCharacters": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                      }
-                    },
-                    "required": [
-                      "maxCharacters",
-                      "overlapCharacters"
-                    ]
-                  }
-                },
-                "required": [
-                  "extractedText"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/rag/ocr": {
-      "post": {
-        "operationId": "scanRagPageOcr",
-        "summary": "Quét OCR ảnh trang nguồn",
-        "tags": [
-          "RAG Admin"
-        ],
-        "responses": {
-          "200": {
-            "description": "Thành công",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "model": {
-                      "type": "string"
-                    },
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "model",
-                    "text"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Yêu cầu không được xử lý",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    },
-                    "requestId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "requestId"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "imageBase64": {
-                    "type": "string",
-                    "minLength": 16,
-                    "maxLength": 900000
-                  },
-                  "mimeType": {
-                    "type": "string",
-                    "enum": [
-                      "image/jpeg",
-                      "image/png"
-                    ]
-                  }
-                },
-                "required": [
-                  "imageBase64",
-                  "mimeType"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        }
       }
     }
   },

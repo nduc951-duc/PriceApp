@@ -22,3 +22,9 @@ it("keeps the worker disabled unless both server-only worker credentials are con
   expect(() => readEnv({ ...common, RAG_WORKER_EMAIL: "rag-worker@example.test" }))
     .toThrow("RAG_WORKER_EMAIL and RAG_WORKER_PASSWORD must be configured together");
 });
+
+it("accepts an optional server-only public RAG feedback signing secret", () => {
+  expect(readEnv(common).ragFeedbackHmacSecret).toBeUndefined();
+  expect(readEnv({ ...common, RAG_FEEDBACK_HMAC_SECRET: "x".repeat(40) }).ragFeedbackHmacSecret).toBe("x".repeat(40));
+  expect(() => readEnv({ ...common, RAG_FEEDBACK_HMAC_SECRET: "short" })).toThrow();
+});

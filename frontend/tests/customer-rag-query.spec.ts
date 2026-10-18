@@ -57,6 +57,42 @@ test("a guest can ask RAG for a price, see its source, and add the chosen price 
   await expect(page.getByLabel("Hỏi đáp với AI").getByRole("heading", { name: "Bánh xe · Đỏ mận khóa ĐL 1T" })).toHaveCount(0);
 });
 
+test("Alt+Enter inserts a line break and Enter sends the customer question", async ({ page }) => {
+  await page.route("**/api/v1/public/catalog", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ items: [], syncedAt: new Date().toISOString() }),
+  }));
+
+  let submittedQuestion = "";
+  await page.route("**/api/v1/public/rag/query", async (route) => {
+    submittedQuestion = (route.request().postDataJSON() as { question: string }).question;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      status: "insufficient_evidence",
+      answer: "Mình chưa tìm thấy dữ liệu giá phù hợp.",
+      items: [],
+      sources: [],
+      retrieval: { vectorChunks: 0, lexicalProducts: 0, embeddingModel: "bge-m3" },
+    }) });
+  });
+
+  await page.goto("/shop");
+  const question = page.getByLabel("Câu hỏi cho trợ lý AI");
+  await question.fill("Giá vít tole");
+  await question.press("Alt+Enter");
+  await expect(question).toHaveValue("Giá vít tole\n");
+  expect(submittedQuestion).toBe("");
+
+  await question.fill("Giá vít tole\ntrang 11");
+  await question.dispatchEvent("keydown", { key: "Enter", isComposing: true, bubbles: true });
+  expect(submittedQuestion).toBe("");
+  await expect(question).toHaveValue("Giá vít tole\ntrang 11");
+  const queryResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/public/rag/query") && response.request().method() === "POST");
+  await question.press("Enter");
+  await queryResponse;
+  expect(submittedQuestion).toBe("Giá vít tole\ntrang 11");
+});
+
 test("customer catalog search is accent-insensitive and independent from AI answers", async ({ page }) => {
   await page.route("**/api/v1/public/catalog", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [
     { category: "Bánh xe", name: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T", specification: "Đỏ mận khóa ĐL 1T", productCode: "BX-1T", aliases: ["Bánh xe đỏ mận"], packaging: "1 bánh/cái", packageQuantity: 1, unit: "bánh", priceId: 149, version: 1, priceType: "retail", minimumQuantity: 1, price: 80000 },
@@ -107,11 +143,11 @@ test("customer catalog search is accent-insensitive and independent from AI answ
   expect(answerCount).toBe(1);
 });
 
-test("a guest clarification reply reuses only the previous product context", async ({ page }) => {
+test("a guest follow-up carries the last question and IDs from the prior result", async ({ page }) => {
   await page.route("**/api/v1/public/catalog", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [], syncedAt: new Date().toISOString() }) }));
-  const requests: Array<{ question: string; previousQuestion?: string }> = [];
+  const requests: Array<{ question: string; previousQuestion?: string; previousVariantIds?: number[] }> = [];
   await page.route("**/api/v1/public/rag/query", async (route) => {
-    const body = route.request().postDataJSON() as { question: string; previousQuestion?: string };
+    const body = route.request().postDataJSON() as { question: string; previousQuestion?: string; previousVariantIds?: number[] };
     requests.push(body);
     const response = body.question === "Bánh xe giá bao nhiêu?"
       ? { status: "clarify", answer: "Bạn cần loại bánh xe nào?", items: [], sources: [], retrieval: { vectorChunks: 2, lexicalProducts: 2, embeddingModel: "bge-m3" } }
@@ -127,8 +163,132 @@ test("a guest clarification reply reuses only the previous product context", asy
   await page.getByRole("button", { name: "Gửi câu hỏi" }).click();
   await expect(page.getByRole("heading", { name: "Bánh xe · Đỏ mận ĐL 1T2" })).toBeVisible();
   await expect(page.getByLabel("Hỏi đáp với AI").getByText("82.000 ₫ / bánh")).toBeVisible();
+  await page.getByLabel("Câu hỏi cho trợ lý AI").fill("Cái đó giá sao?");
+  await page.getByRole("button", { name: "Gửi câu hỏi" }).click();
+  await expect(page.getByRole("heading", { name: "Bánh xe · Đỏ mận ĐL 1T2" })).toBeVisible();
   expect(requests).toEqual([
     { question: "Bánh xe giá bao nhiêu?" },
     { question: "1T2", previousQuestion: "Bánh xe giá bao nhiêu?" },
+    { question: "Cái đó giá sao?", previousQuestion: "1T2", previousVariantIds: [687] },
   ]);
+});
+
+test("customer sees a validated comparison block and its cited source", async ({ page }, testInfo) => {
+  await page.route("**/api/v1/public/catalog", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [], syncedAt: new Date().toISOString() }) }));
+  await page.route("**/api/v1/public/rag/query", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+    status: "answered", answer: "The documented options differ.", publicFeedbackHandle: "response-handle",
+    answerBlocks: [{ kind: "comparison", text: "The source describes different material details for each option.", variantIds: [687, 688], evidenceIds: ["variant:687", "variant:688", "chunk:11", "chunk:12"] }],
+    items: [{ id: 687, productName: "Bánh xe", category: "Bánh xe", variant: "Đỏ mận ĐL 1T2", verificationStatus: "verified", sourcePages: [11], prices: [{ ...price, id: 152, amount: 82000 }] }],
+    sources: [{ pageNumber: 11, chunkId: 11, chunkKey: "page:11:variant:687:0", sourceRevision: 1, sourceSpan: { start: 0, end: 20 }, excerpt: "Verified material detail", evidenceKind: "verified_catalog", verifiedVariantId: 687 }],
+    retrieval: { vectorChunks: 2, lexicalProducts: 2, embeddingModel: "bge-m3" },
+  }) }));
+  let submittedFeedback: unknown;
+  await page.route("**/api/v1/public/rag/feedback", async (route) => {
+    submittedFeedback = route.request().postDataJSON();
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ saved: true }) });
+  });
+
+  await page.goto("/shop");
+  await page.locator("#price-question").fill("compare material details");
+  await page.locator("#price-question").press("Enter");
+
+  await expect(page.getByText("So s\u00e1nh c\u00f3 c\u0103n c\u1ee9")).toBeVisible();
+  await expect(page.getByText("The source describes different material details for each option.")).toBeVisible();
+  await expect(page.getByLabel("Hỏi đáp với AI").getByText("82.000 ₫ / 1 bánh/cái", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Trang 11" })).toBeVisible();
+  const feedback = page.getByTestId("public-rag-feedback");
+  await page.getByTestId("public-rag-feedback-negative").click();
+  await page.getByTestId("public-rag-feedback-reason").selectOption("wrong_price_or_unit");
+  await page.getByTestId("public-rag-feedback-submit").click();
+  await expect(feedback.getByRole("status")).toBeVisible();
+  expect(submittedFeedback).toEqual({ feedbackHandle: "response-handle", helpful: false, reason: "wrong_price_or_unit" });
+  await page.screenshot({ path: testInfo.outputPath("grounded-comparison.png"), fullPage: true });
+});
+
+test("catalog listing uses structured totals even when the answer wording changes", async ({ page }) => {
+  await page.route("**/api/v1/public/catalog", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [], syncedAt: new Date().toISOString() }) }));
+  await page.route("**/api/v1/public/rag/query", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+    status: "answered", answer: "Các quy cách phù hợp có trong danh mục dưới đây.",
+    catalogPage: { total: 2, nextCursor: 687, complete: false },
+    items: [{ id: 687, productName: "Bánh xe", category: "Bánh xe", variant: "Đỏ mận ĐL 1T2", verificationStatus: "verified", sourcePages: [11], prices: [] }],
+    sources: [], retrieval: { vectorChunks: 0, lexicalProducts: 1, embeddingModel: "bge-m3" },
+  }) }));
+  await page.goto("/shop");
+  await page.getByLabel("Câu hỏi cho trợ lý AI").fill("Liệt kê các loại bánh xe");
+  await page.getByLabel("Câu hỏi cho trợ lý AI").press("Enter");
+  await expect(page.getByText("Đang hiển thị 1 / 2 quy cách đã xác minh.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Danh sách chưa đầy đủ. Hãy thêm quy cách hoặc nhóm hàng để thu hẹp kết quả.", { exact: true })).toBeVisible();
+});
+
+test("clarification never lets a customer add a candidate or displays its price as a quote", async ({ page }) => {
+  await page.route("**/api/v1/public/catalog", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [], syncedAt: new Date().toISOString() }) }));
+  await page.route("**/api/v1/public/rag/query", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+    status: "clarify", answer: "Bạn cần bánh xe quy cách nào?",
+    items: [{ id: 687, productName: "Bánh xe", category: "Bánh xe", variant: "Đỏ mận ĐL 1T2", verificationStatus: "verified", sourcePages: [11], prices: [price] }],
+    sources: [], retrieval: { vectorChunks: 0, lexicalProducts: 1, embeddingModel: "bge-m3" },
+  }) }));
+  await page.goto("/shop");
+  await page.getByLabel("Câu hỏi cho trợ lý AI").fill("Bánh xe bao nhiêu?");
+  await page.getByLabel("Câu hỏi cho trợ lý AI").press("Enter");
+  await expect(page.getByText("Bạn cần bánh xe quy cách nào?", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Thêm vào đơn", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Hỏi đáp với AI")).not.toContainText("80.000");
+});
+
+for (const change of ["changed", "removed", "unavailable"] as const) {
+  test(`RAG add revalidates the current SQL catalog when the selected price is ${change}`, async ({ page }) => {
+    const catalogPrice = { category: "Bánh xe", name: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T", specification: "Đỏ mận khóa ĐL 1T", packaging: "1 bánh/cái", packageQuantity: 1, unit: "bánh", priceId: price.id, version: price.version, priceType: "retail", minimumQuantity: 1, price: price.amount };
+    let revalidating = false;
+    let revalidationReads = 0;
+    await page.route("**/api/v1/public/catalog", route => {
+      if (revalidating) revalidationReads++;
+      if (revalidating && change === "unavailable") return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "UNAVAILABLE", message: "Unavailable" }, requestId: "revalidation" }) });
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: !revalidating ? [catalogPrice] : change === "removed" ? [] : [{ ...catalogPrice, version: 2, price: 85000 }], syncedAt: new Date().toISOString() }) });
+    });
+    await page.route("**/api/v1/public/rag/query", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      status: "answered", answer: "Giá hiện hành trong bảng bên dưới.",
+      items: [{ id: 686, productName: "Bánh xe", category: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T", verificationStatus: "verified", sourcePages: [11], prices: [price] }],
+      sources: [], retrieval: { vectorChunks: 0, lexicalProducts: 1, embeddingModel: "bge-m3" },
+    }) }));
+    await page.goto("/shop");
+    await expect(page.getByText("1 mặt hàng", { exact: true })).toBeVisible();
+    await page.getByLabel("Câu hỏi cho trợ lý AI").fill("Giá bánh xe đỏ mận khóa ĐL 1T");
+    await page.getByLabel("Câu hỏi cho trợ lý AI").press("Enter");
+    revalidating = true;
+    await page.getByRole("button", { name: "Thêm vào đơn", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Giỏ hàng (0)", exact: true })).toBeVisible();
+    if (change === "changed") {
+      const notice = page.getByRole("alert").filter({ hasText: "Giá vừa thay đổi" });
+      await expect(notice).toContainText("85.000");
+      await notice.getByRole("button", { name: "Xác nhận giá mới" }).click();
+      await expect(page.getByRole("button", { name: "Giỏ hàng (1)", exact: true })).toBeVisible();
+      expect(revalidationReads).toBe(2);
+    } else {
+      await expect(page.getByRole("alert").filter({ hasText: change === "removed" ? "Mức giá này không còn được bán" : "Chưa kiểm tra được giá hiện hành" })).toBeVisible();
+      expect(revalidationReads).toBe(1);
+    }
+  });
+}
+
+test("customer variant listing shows every specification and only priced variants can be added", async ({ page }) => {
+  await page.route("**/api/v1/public/catalog", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [], syncedAt: new Date().toISOString() }) }));
+  await page.route("**/api/v1/public/rag/query", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+    status: "answered",
+    answer: "Tắc kê đạn có 2 quy cách đã xác minh: 6x50 34.000 ₫; 8x60 chưa có giá hiện hành.",
+    items: [
+      { id: 1, productName: "Tắc kê đạn", category: "Tắc kê", variant: "6x50", verificationStatus: "verified", sourcePages: [2], prices: [{ ...price, id: 301, amount: 34000, packagingName: "Bịch 10 cái", packageQuantity: 10, unit: "cái" }] },
+      { id: 2, productName: "Tắc kê đạn", category: "Tắc kê", variant: "8x60", verificationStatus: "verified", sourcePages: [3], prices: [] },
+    ],
+    sources: [], retrieval: { vectorChunks: 1, lexicalProducts: 1, embeddingModel: "bge-m3" },
+  }) }));
+
+  await page.goto("/shop");
+  await page.getByLabel("Câu hỏi cho trợ lý AI").fill("Cửa hàng có bao nhiêu loại tắc kê đạn?");
+  await page.getByLabel("Câu hỏi cho trợ lý AI").press("Enter");
+
+  await expect(page.getByText("Tắc kê đạn có 2 quy cách đã xác minh", { exact: false })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tắc kê đạn · 6x50" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tắc kê đạn · 8x60" })).toBeVisible();
+  await expect(page.getByText("Không có mức giá phù hợp với câu hỏi này.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Thêm vào đơn" })).toHaveCount(1);
 });

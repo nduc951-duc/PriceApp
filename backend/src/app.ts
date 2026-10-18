@@ -41,6 +41,7 @@ export function buildApp(options: { env: AppEnv; supabaseFactory: SupabaseFactor
   app.decorate("authenticate", createAuthenticate(options.env, options.supabaseFactory));
   app.decorate("publicSupabaseFactory", options.supabaseFactory);
   app.decorate("customerOrderHmacSecret", options.env.customerOrderHmacSecret);
+  app.decorate("ragFeedbackHmacSecret", options.env.ragFeedbackHmacSecret);
   app.decorate("requireRole", requireRole);
   registerHealthRoutes(app);
   registerAuthRoutes(app);

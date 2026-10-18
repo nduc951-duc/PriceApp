@@ -4,60 +4,45 @@ import { buildCitations, type RetrievedChunkEvidence } from "./citations.js";
 const evidence = (overrides: Partial<RetrievedChunkEvidence> = {}): RetrievedChunkEvidence => ({
   pageNumber: 4,
   chunkId: 11,
-  chunkKey: "page:9:ocr:0",
-  sourceRevision: 3,
-  sourceSpan: { start: 20, end: 43 },
-  excerpt: "Price by approved package.",
-  evidenceKind: "approved_page_ocr",
+  chunkKey: "variant:21:0",
+  sourceRevision: null,
+  sourceSpan: null,
+  excerpt: "Vật tư đã xác minh trong catalog.",
+  evidenceKind: "verified_catalog",
+  verifiedVariantId: 21,
   ...overrides,
 });
 
 describe("buildCitations", () => {
-  it("preserves separate retrieved chunks even when they refer to the same page", () => {
-    const first = evidence();
-    const second = evidence({ chunkId: 12, chunkKey: "page:9:ocr:1", sourceSpan: { start: 40, end: 61 }, excerpt: "Price by another package." });
-
-    expect(buildCitations([first, second])).toEqual([
+  it("keeps separate catalog chunks and their verified variant IDs", () => {
+    expect(buildCitations([evidence(), evidence({ chunkId: 12, chunkKey: "variant:21:1" })])).toEqual([
       {
-        pageNumber: 4, chunkId: 11, chunkKey: "page:9:ocr:0", sourceRevision: 3,
-        sourceSpan: { start: 20, end: 43 }, excerpt: "Price by approved package.", evidenceKind: "approved_page_ocr",
+        pageNumber: 4, chunkId: 11, chunkKey: "variant:21:0", sourceRevision: null,
+        sourceSpan: null, excerpt: "Vật tư đã xác minh trong catalog.", evidenceKind: "verified_catalog", verifiedVariantId: 21,
       },
       {
-        pageNumber: 4, chunkId: 12, chunkKey: "page:9:ocr:1", sourceRevision: 3,
-        sourceSpan: { start: 40, end: 61 }, excerpt: "Price by another package.", evidenceKind: "approved_page_ocr",
+        pageNumber: 4, chunkId: 12, chunkKey: "variant:21:1", sourceRevision: null,
+        sourceSpan: null, excerpt: "Vật tư đã xác minh trong catalog.", evidenceKind: "verified_catalog", verifiedVariantId: 21,
       },
     ]);
   });
 
-  it("omits evidence that lacks required fields instead of inferring them from metadata", () => {
-    const missingPage = evidence({ pageNumber: undefined, metadata: { page_number: 4 } });
-    const missingRevision = evidence({ sourceRevision: undefined, metadata: { source_revision: 3 } });
-
-    expect(buildCitations([missingPage, missingRevision])).toEqual([]);
+  it("allows catalog citations without scanned pages", () => {
+    expect(buildCitations([evidence({ pageNumber: null })])).toEqual([{
+      pageNumber: null, chunkId: 11, chunkKey: "variant:21:0", sourceRevision: null,
+      sourceSpan: null, excerpt: "Vật tư đã xác minh trong catalog.", evidenceKind: "verified_catalog", verifiedVariantId: 21,
+    }]);
   });
 
-  it("rejects invalid spans and IDs and copies only explicit verified IDs", () => {
-    const citation = evidence({ verifiedVariantId: 21, verifiedPriceId: 34 });
+  it("omits incomplete or invalid provenance without inferring it from metadata", () => {
+    const missingVariant = evidence({ pageNumber: null, verifiedVariantId: null });
     const invalidSpan = evidence({ sourceSpan: { start: 43, end: 20 } });
     const invalidId = evidence({ chunkId: 0 });
-    const invalidOptionalId = evidence({ verifiedVariantId: -2 });
-
-    expect(buildCitations([citation, invalidSpan, invalidId, invalidOptionalId])).toEqual([
-      {
-        pageNumber: 4, chunkId: 11, chunkKey: "page:9:ocr:0", sourceRevision: 3,
-        sourceSpan: { start: 20, end: 43 }, excerpt: "Price by approved package.", evidenceKind: "approved_page_ocr",
-        verifiedVariantId: 21, verifiedPriceId: 34,
-      },
-    ]);
+    const missingPageAndMetadata = evidence({ pageNumber: undefined, verifiedVariantId: null, metadata: { page_number: 4, product_variant_id: 21 } });
+    expect(buildCitations([missingVariant, invalidSpan, invalidId, missingPageAndMetadata])).toEqual([]);
   });
 
-  it("keeps verified catalog evidence when OCR revision offsets do not apply", () => {
-    expect(buildCitations([evidence({
-      chunkKey: "page:9:variant:21:0", sourceRevision: null, sourceSpan: null,
-      evidenceKind: "verified_catalog", verifiedVariantId: 21,
-    })])).toEqual([{
-      pageNumber: 4, chunkId: 11, chunkKey: "page:9:variant:21:0", sourceRevision: null,
-      sourceSpan: null, excerpt: "Price by approved package.", evidenceKind: "verified_catalog", verifiedVariantId: 21,
-    }]);
+  it("rejects historical OCR evidence", () => {
+    expect(buildCitations([evidence({ evidenceKind: "approved_page_ocr" as "verified_catalog" })])).toEqual([]);
   });
 });

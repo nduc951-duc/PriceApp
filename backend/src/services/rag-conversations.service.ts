@@ -58,6 +58,23 @@ export async function latestUserQuestion(client: SupabaseClient, ownerId: string
   return typeof data?.content === "string" ? data.content : undefined;
 }
 
+export async function latestAssistantVariantIds(client: SupabaseClient, ownerId: string, conversationId: string) {
+  await requireOwnedConversation(client, ownerId, conversationId);
+  const { data, error } = await client.from("rag_conversation_messages")
+    .select("metadata")
+    .eq("conversation_id", conversationId)
+    .eq("role", "assistant")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error("Unable to read prior assistant result context");
+  const metadata = data?.metadata;
+  if (typeof metadata !== "object" || metadata === null || !("variantIds" in metadata)) return [];
+  const variantIds = (metadata as { variantIds?: unknown }).variantIds;
+  if (!Array.isArray(variantIds)) return [];
+  return [...new Set(variantIds.filter((id): id is number => Number.isSafeInteger(id) && id > 0))].slice(0, 40);
+}
+
 export async function appendConversationMessage(client: SupabaseClient, ownerId: string, conversationId: string, input: StoredConversationMessageInput) {
   await requireOwnedConversation(client, ownerId, conversationId);
   const { data, error } = await client.from("rag_conversation_messages")

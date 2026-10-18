@@ -1,28 +1,54 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ragChunksRepository } from "../repositories/rag-chunks.repository.js";
-import { ragPagesRepository } from "../repositories/rag-pages.repository.js";
+
+
 import { createHash } from "node:crypto";
 import { chatModel, embedTexts, embeddingModel, generateGroundedAnswer, providerName } from "../rag/provider.js";
 
 
-type Check = { ok: boolean; detail: string; count?: number; dimensions?: number; model?: string; fingerprint?: string };
+type Check = { catalogVariants?: number; embeddedVariants?: number; missingVariants?: number; activeGeneration?: number | null; ok: boolean; detail: string; count?: number; dimensions?: number; model?: string; fingerprint?: string };
 
 function failure(): Check {
   return { ok: false, detail: "Không kiểm tra được dịch vụ." };
 }
 
 export async function healthRag(client: SupabaseClient) {
-  const chunksRepo = ragChunksRepository(client);
-  const pagesRepo = ragPagesRepository(client);
+
+
   const [database, embedding, chat] = await Promise.all([
     (async (): Promise<Check> => {
       try {
-        const [{ count: pages, error: pageError }, { count: chunks, error: chunkError }] = await Promise.all([
-          pagesRepo.approvedCount(),
-          chunksRepo.count(),
+        const [state] = await Promise.all([
+          client.from("rag_index_state").select("active_generation").eq("id", true).maybeSingle(),
         ]);
-        if (pageError || chunkError) throw new Error(pageError?.message ?? chunkError?.message ?? "Không đọc được schema RAG.");
-        return { ok: true, detail: `${pages ?? 0} trang đã duyệt; ${chunks ?? 0} chunk đã lưu.`, count: chunks ?? 0 };
+        if (state.error) throw new Error("Catalog diagnostics unavailable");
+        const catalogIds = new Set<number>();
+        for (let start = 0;; start += 500) {
+          const catalog = await client.from("product_variants")
+            .select("id,products!inner(categories!inner(id))")
+            .eq("active", true).eq("verification_status", "verified")
+            .eq("products.active", true).eq("products.categories.active", true)
+            .order("id").range(start, start + 499);
+          if (catalog.error) throw new Error("Catalog diagnostics unavailable");
+          for (const row of catalog.data) catalogIds.add(row.id);
+          if (catalog.data.length < 500) break;
+        }
+        const generation = state.data?.active_generation ?? null;
+        const variants = new Set<number>();
+        let count = 0;
+        if (generation !== null) for (let start = 0;; start += 500) {
+          const result = await client.from("rag_chunks").select("product_variant_id,embedding_model")
+            .eq("generation_id", generation).eq("metadata->>kind", "verified_catalog").order("id").range(start, start + 499);
+          if (result.error) throw new Error("Catalog index diagnostics unavailable");
+          for (const row of result.data) if (row.product_variant_id !== null && catalogIds.has(row.product_variant_id)) {
+            count += 1;
+            if (row.embedding_model === process.env.RAG_EMBEDDING_MODEL?.trim()) variants.add(row.product_variant_id);
+          }
+          if (result.data.length < 500) break;
+        }
+        const total = catalogIds.size;
+        return { ok: true, detail: `${total} verified catalog variants; ${count} active catalog chunks; ${variants.size} variants embedded with the configured model.`,
+          count, catalogVariants: total, embeddedVariants: variants.size, missingVariants: Math.max(0, total - variants.size), activeGeneration: generation };
+
       } catch { return failure(); }
     })(),
     (async (): Promise<Check> => {

@@ -33,6 +33,10 @@ export function registerCustomerOrderRoutes(app: FastifyInstance): void {
       preValidation: [app.authenticate, app.requireRole("owner", "editor")],
       schema: fastifyRouteSchema(getApiContract("listCustomerOrderRequests")),
     }, customerOrderInbox);
+    routes.post("/customer-order-requests", {
+      preValidation: [app.authenticate, app.requireRole("owner", "editor")],
+      schema: fastifyRouteSchema(getApiContract("createStaffCustomerOrder")),
+    }, submitCustomerOrder);
     routes.patch("/customer-order-requests/:requestId/status", {
       preValidation: [app.authenticate, app.requireRole("owner", "editor")],
       schema: fastifyRouteSchema(getApiContract("updateCustomerOrderStatus")),

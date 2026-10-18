@@ -1,6 +1,7 @@
 export type CatalogEntry = {
   categoryId: number; productId: number; variantId: number; name: string; category: string;
   spec: string; displayName: string; productCode: string | null; aliases: string[]; sourcePages: number[]; sourceFiles: string[];
+  verificationStatus: "verified" | "needs_review" | "unreadable";
 };
 
 export type CatalogPrice = {
@@ -8,7 +9,7 @@ export type CatalogPrice = {
   packagingId: number; name: string; category: string; variantDisplayName: string;
   spec: string; variantSpec: string; packageName: string; packageQuantity: number;
   packageNote: string; priceType: string; minimumQuantity: number; price: number;
-  unit: string; supplier: string; sourcePages: number[]; sourceFiles: string[];
+  unit: string; supplier: string; sourcePages: number[]; sourceFiles: string[]; validFrom: string; validTo: string | null;
   status: "verified" | "needs_review" | "unreadable"; version: number;
 };
 

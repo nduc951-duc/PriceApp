@@ -1,7 +1,23 @@
+export const evaluationIntents = [
+  "price_lookup",
+  "catalog_list",
+  "product_info",
+  "advice",
+  "comparison",
+  "multi_intent",
+  "out_of_domain",
+  "clarification",
+] as const;
+
+export type EvaluationIntent = (typeof evaluationIntents)[number];
+
 export interface EvaluationCase {
   id: string;
   sourceId: string;
   questionFamilyId: string;
+  question?: string;
+  /** Candidate annotation; only adjudicated label intents are included in scores. */
+  intent?: EvaluationIntent;
   label?: CandidateLabel | AdjudicatedLabel;
 }
 
@@ -14,23 +30,32 @@ export interface AdjudicatedLabel {
   status: "adjudicated";
   adjudicator: string;
   expectedOutcome: "answer" | "abstain";
+  expectedIntent?: EvaluationIntent;
   relevantVariantIds: number[];
   expectedVariantId?: number;
   expectedPackageId?: string;
   expectedTier?: string;
   expectedAmount?: number;
+  expectedUnit?: string;
   expectedCitationIds?: string[];
+  expectedListVariantIds?: number[];
+  expectedListTotal?: number;
 }
 
 export interface EvaluationObservation {
   caseId: string;
   retrievedVariantIds: number[];
+  intent?: EvaluationIntent;
+  listedVariantIds?: number[];
+  listedTotal?: number;
+  listingComplete?: boolean;
   answer?: {
     abstained: boolean;
     variantId?: number;
     packageId?: string;
     tier?: string;
     amount?: number;
+    unit?: string;
     citationIds?: string[];
   };
   latencyMs: number;
@@ -55,10 +80,20 @@ export interface EvaluationMetrics {
   variantAccuracy: AccuracyMetric;
   packageAccuracy: AccuracyMetric;
   tierAccuracy: AccuracyMetric;
+  unitAccuracy: AccuracyMetric;
   amountAccuracy: AccuracyMetric;
+  intentAccuracy: AccuracyMetric;
+  listPrecision: AccuracyMetric;
+  listRecall: AccuracyMetric;
+  listCompleteness: AccuracyMetric;
   citationCorrectness: AccuracyMetric;
   /** Exact agreement with the adjudicated answer-or-abstain expectation. */
   abstentionAccuracy: AccuracyMetric;
+  perIntent: Array<{
+    intent: EvaluationIntent;
+    scoredCases: number;
+    answerAccuracy: AccuracyMetric;
+  }>;
   latencyMs: { p50: number | null; p95: number | null };
 }
 
@@ -126,10 +161,17 @@ export function evaluateObservations(
   const variant: boolean[] = [];
   const packages: boolean[] = [];
   const tiers: boolean[] = [];
+  const units: boolean[] = [];
   const amounts: boolean[] = [];
+  const intents: boolean[] = [];
+  const listCompleteness: boolean[] = [];
+  let listTruePositives = 0;
+  let listPredicted = 0;
+  let listExpected = 0;
   const citations: boolean[] = [];
   const abstentions: boolean[] = [];
   const latencies: number[] = [];
+  const intentOutcomes = new Map<EvaluationIntent, boolean[]>();
 
   for (const { item, observation } of scored) {
     const label = item.label;
@@ -144,7 +186,29 @@ export function evaluateObservations(
     if (label.expectedVariantId !== undefined) variant.push(observation.answer?.variantId === label.expectedVariantId);
     if (label.expectedPackageId !== undefined) packages.push(observation.answer?.packageId === label.expectedPackageId);
     if (label.expectedTier !== undefined) tiers.push(observation.answer?.tier === label.expectedTier);
+    if (label.expectedUnit !== undefined) units.push(observation.answer?.unit === label.expectedUnit);
     if (label.expectedAmount !== undefined) amounts.push(observation.answer?.amount === label.expectedAmount);
+    if (label.expectedIntent !== undefined) {
+      intents.push(observation.intent === label.expectedIntent);
+      const outcomes = intentOutcomes.get(label.expectedIntent) ?? [];
+      outcomes.push((observation.answer?.abstained ?? false) === (label.expectedOutcome === "abstain"));
+      intentOutcomes.set(label.expectedIntent, outcomes);
+    }
+    if (label.expectedListTotal !== undefined && label.expectedListVariantIds !== undefined) {
+      const expectedIds = new Set(label.expectedListVariantIds);
+      const listedIds = observation.listedVariantIds ?? [];
+      const uniqueListedIds = new Set(listedIds);
+      listTruePositives += [...uniqueListedIds].filter((id) => expectedIds.has(id)).length;
+      listPredicted += uniqueListedIds.size;
+      listExpected += expectedIds.size;
+      listCompleteness.push(
+        observation.listingComplete === true &&
+        observation.listedTotal === label.expectedListTotal &&
+        listedIds.length === label.expectedListTotal &&
+        uniqueListedIds.size === label.expectedListTotal &&
+        [...expectedIds].every((id) => uniqueListedIds.has(id)),
+      );
+    }
     if (label.expectedCitationIds !== undefined) {
       citations.push(sameStringSet(observation.answer?.citationIds ?? [], label.expectedCitationIds));
     }
@@ -160,9 +224,18 @@ export function evaluateObservations(
     variantAccuracy: accuracy(variant),
     packageAccuracy: accuracy(packages),
     tierAccuracy: accuracy(tiers),
+    unitAccuracy: accuracy(units),
     amountAccuracy: accuracy(amounts),
+    intentAccuracy: accuracy(intents),
+    listPrecision: ratioMetric(listTruePositives, listPredicted),
+    listRecall: ratioMetric(listTruePositives, listExpected),
+    listCompleteness: accuracy(listCompleteness),
     citationCorrectness: accuracy(citations),
     abstentionAccuracy: accuracy(abstentions),
+    perIntent: evaluationIntents.flatMap((intent) => {
+      const outcomes = intentOutcomes.get(intent);
+      return outcomes ? [{ intent, scoredCases: outcomes.length, answerAccuracy: accuracy(outcomes) }] : [];
+    }),
     latencyMs: { p50: percentile(latencies, 0.5), p95: percentile(latencies, 0.95) },
   };
 }
@@ -212,6 +285,10 @@ function assertUnique(values: string[], name: string): void {
 function accuracy(values: boolean[]): AccuracyMetric {
   const correct = values.filter(Boolean).length;
   return { correct, total: values.length, value: values.length === 0 ? null : correct / values.length };
+}
+
+function ratioMetric(correct: number, total: number): AccuracyMetric {
+  return { correct, total, value: total === 0 ? null : correct / total };
 }
 
 function meanMetric(values: number[]): { reciprocalRankSum: number; total: number; value: number | null } {

@@ -17,6 +17,7 @@ describe("catalog mapping", () => {
     const mapped = mapCatalogRows([row({ products: null, variant_sources: null, packaging_options: [{ ...row().packaging_options[0], prices: [{ ...row().packaging_options[0].prices[0], price_lists: null }] }] })]);
     expect(mapped.entries[0]).toMatchObject({ categoryId: 0, productId: 0, name: "Variant", sourcePages: [], sourceFiles: [] });
     expect(mapped.prices).toHaveLength(1);
+    expect(mapped.prices[0]).toMatchObject({ validFrom: "2020-01-01T00:00:00.000Z", validTo: null });
     expect(mapped.prices[0]).toMatchObject({ price: 12345.5, supplier: "Chưa rõ nhà cung cấp", sourcePages: [], sourceFiles: [] });
   });
   it("uses the ungrouped category fallback and accepts empty package joins", () => {
@@ -32,7 +33,7 @@ describe("catalog mapping", () => {
   });
   it("returns the catalog SKU and aliases for direct staff search", () => {
     const mapped = mapCatalogRows([row()]);
-    expect(mapped.entries[0]).toMatchObject({ productCode: "SKU-7", aliases: ["Product alias"] });
+    expect(mapped.entries[0]).toMatchObject({ productCode: "SKU-7", aliases: ["Product alias"], verificationStatus: "verified" });
   });
   it("omits prices that have not started or have expired", () => {
     const packaging = row().packaging_options[0];

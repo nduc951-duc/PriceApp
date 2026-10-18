@@ -20,7 +20,7 @@ Root gates run both workspaces: `npm run lint`, `npm run typecheck`, `npm test`,
 
 ## CORS, auth and deployment
 
-Set `FRONTEND_ORIGINS` to a comma-separated list of exact browser origins, including scheme and port, with no path (for example `https://price.example.com`). Wildcard origins are not supported. Configure the deployed frontend with `NEXT_PUBLIC_API_BASE_URL` pointing at the API. The active PriceApp UI sends catalog, price, source-file, and RAG traffic to the independently deployed Fastify API. Legacy Next RAG handlers are still present as a temporary rollback path while isolated authenticated E2E is pending; the UI does not call them. If rolling back to that path, the frontend deployment must also provide its prior server-side RAG environment settings. Keep Supabase Auth/PostgreSQL/Storage RLS enabled. The backend forwards the caller session to Supabase and does not use a service-role key.
+Set `FRONTEND_ORIGINS` to a comma-separated list of exact browser origins, including scheme and port, with no path (for example `https://price.example.com`). Wildcard origins are not supported. Configure the deployed frontend with `NEXT_PUBLIC_API_BASE_URL` pointing at the API. The active PriceApp UI sends catalog, price, source-file, and RAG traffic to the independently deployed Fastify API. The old Next RAG handlers and OCR/page-edit routes have been removed. Keep Supabase Auth/PostgreSQL/Storage RLS enabled. The backend forwards the caller session to Supabase and does not use a service-role key.
 
 The liveness check does not validate Supabase. For login problems, verify both apps use the same Supabase project URL and publishable key, confirm the Auth user exists, check that `FRONTEND_ORIGINS` exactly matches the browser origin, then inspect the API response request ID and Supabase Auth logs. A 401 indicates a missing/invalid session, 403 a role/policy denial, and 503 an unavailable Auth/upstream service. Never paste access tokens or passwords into issue reports.
 
@@ -37,9 +37,11 @@ The liveness check does not validate Supabase. For login problems, verify both a
 
 The project ref must match the Supabase URL hostname. The known production project ref is rejected by the Playwright config. E2E servers use isolated ports 3210/4210 by default, never reuse an existing server, and suppress Playwright traces so credential entry is not retained in artifacts. Quote tests use an in-memory catalog fixture. Price conflict requests are intercepted before reaching Supabase; offline edits assert that no write request is sent. The RAG UI test stubs its query response so it does not call a provider. The employee role test performs only catalog and admin reads. Auth sign-in is the only Supabase Auth operation performed by these tests.
 
-The authenticated cases have not passed in this environment because no isolated test project/account is configured. Keep the legacy Next RAG routes and helpers until the isolated desktop and mobile E2E suite passes against the backend path. Do not use the application's configured production Supabase project for this gate.
+The authenticated cases have not passed in this environment because no isolated test project/account is configured. Deterministic mocked E2E remains available without Supabase. Do not use the application's configured production Supabase project for the authenticated gate.
 
 ## Customer order requests
+
+Customers submit from `/shop`. Owners and editors can also open **Đơn khách đặt → Tạo đơn** from `/staff`, select the published product, specification, packaging and price tier, and enter the customer's contact details. Staff submissions use authenticated `POST /api/v1/customer-order-requests`; the anonymous five-per-ten-minute IP quota applies only to the public submission route. Both routes use the same signed, idempotent database RPC, validate current price versions and package minimums, and save immutable order-item snapshots. The inbox reloads after successful creation; contacted, confirmed and cancelled states remain owner/editor operations.
 
 Apply `supabase/migrations/202610160002_customer_order_requests.sql` to the intended Supabase project before enabling the public customer flow. The migration creates the anonymous-safe verified retail/wholesale catalog RPC, the pending order-request tables, and owner/editor-only inbox reads and status updates. It also requires an HMAC secret shared between the backend environment (`CUSTOMER_ORDER_HMAC_SECRET`, at least 32 characters) and the private database table. After applying the migration, insert the same generated random secret into `private.customer_order_security` using the Supabase SQL editor or another trusted database administrator session; never put it in frontend variables, browser code, logs, or source control. Without both values, order submissions fail closed. The database validates a short timestamp window and consumes each signed nonce once, so direct anonymous RPC calls cannot bypass the API's IP rate limit. It does not collect payment, set delivery fees, decrement stock, or write sales revenue. Review and apply it from a controlled non-production project first; do not paste service-role credentials into the frontend or browser.
 
@@ -53,21 +55,17 @@ on conflict (singleton) do update set hmac_secret = excluded.hmac_secret;
 
 After deployment, check `GET /api/v1/public/catalog` without an Authorization header and confirm the response includes only verified retail/wholesale data without supplier/source fields. Submit a small test request with `POST /api/v1/public/order-requests`, then confirm `GET /api/v1/customer-order-requests` returns 401 without staff login, returns 403 for a viewer, and shows the request for owner/editor. The API limits anonymous submissions to five per source IP per ten minutes per API process, and the database requires a backend-only signature plus a one-time nonce; deployments with multiple API replicas should also configure a shared gateway/WAF rate limit.
 
-## Legacy RAG cutover gate and rollback point
+## Public RAG feedback
 
-The legacy Next handlers, server-only helpers, and tests remain in the worktree. Their removal is pending successful authenticated E2E on an isolated Supabase test project; backend parity alone does not satisfy that gate. The rollback source is commit `e8260d2` (the Task 7 base). After the E2E gate and parent review, create a local annotated tag pointing at that commit before deleting the old surface:
+Anonymous shoppers can rate a RAG response only when the backend has `RAG_FEEDBACK_HMAC_SECRET` configured and migration `202610180006_rag_feedback_taxonomy_and_public_handles.sql` has been applied. Generate a separate random value of at least 32 characters in a private terminal; store it in the backend secret manager and the singleton row in `private.rag_public_feedback_security`. Keep it separate from `CUSTOMER_ORDER_HMAC_SECRET`; never put it in frontend configuration, logs, source control, or chat. Without both settings, the API omits the response-bound feedback handle and the customer rating controls stay hidden.
 
-```powershell
-git tag -a priceapp-pre-rag-cutover e8260d2 -m "PriceApp before removing legacy Next RAG routes"
-```
+The signed handle contains no question, answer, conversation, account, or source IP. It expires after 30 minutes. The public endpoint accepts at most ten submissions per source IP per hour per API process, does not persist IP addresses, and the database accepts only one row per response ID. For multi-replica deployments, configure the same shared gateway/WAF rate limit used for other public endpoints. The owner feedback summary combines these aggregate ratings with authenticated staff feedback; public rows have no user or conversation link and their table is not directly writable by `anon` or `authenticated`.
 
-If a later cutover needs to be reverted, restore the complete legacy surface on a recovery branch, including imported helpers and tests:
+Run `supabase test db supabase/tests/rag_public_feedback_security.sql --local` after applying migrations to a local or isolated database. Do not apply this migration or its fixture to production as part of local validation.
 
-```powershell
-git restore --source=priceapp-pre-rag-cutover --staged --worktree -- frontend/src/app/api/rag frontend/src/lib/rag
-```
+## Catalog-only RAG
 
-Review the restored diff and run frontend tests before committing the rollback. The API implementation remains available under `backend/src`; this file restore is intended to restore the old Next path during a controlled rollback.
+RAG answers now use active, verified Supabase catalog rows, attributes, and packaging data. Current prices are fetched from SQL for each price question. OCR, transcript editing, page preview, and the legacy Next RAG routes are removed. Apply `supabase/migrations/202610180009_catalog_only_rag.sql` to the intended project before expecting the new behavior; then rebuild the active embedding generation with the dedicated worker. Follow [RAG_SETUP.md](../RAG_SETUP.md) for setup and checks. Existing transcript rows are retained for historical integrity, but their API access and indexing trigger are revoked.
 
 ## Dependency audit status
 

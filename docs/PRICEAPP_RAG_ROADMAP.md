@@ -1,3 +1,5 @@
+> Cập nhật 2026-10-18: tài liệu này ghi lại thiết kế/trạng thái cũ có luồng OCR. Ứng dụng hiện chỉ dùng catalog Supabase đã xác minh; xem [RAG_SETUP.md](../RAG_SETUP.md) và migration 202610180009_catalog_only_rag.sql để biết hành vi hiện hành.
+
 # PriceApp · RAG Roadmap
 
 > **Trợ lý tra cứu và lập báo giá vật tư bằng Hybrid RAG kết hợp dữ liệu giá có cấu trúc.**
@@ -645,3 +647,9 @@ Recall@5 ≥ 90%, citation correctness ≥ 95%, xử lý không có đáp án đ
 Mỗi lần thực hiện: chốt một lát cắt → sửa/viết migration mới nếu cần → test đúng rủi ro → demo/ghi evidence → cập nhật task. Chỉ đánh dấu hoàn tất phần đã được kiểm chứng. Nếu deadline ngắn, giữ L1–L6 và L8; L7 là điểm cộng nghiệp vụ, OCR tự động và tính năng nâng cao làm sau.
 
 [↑ Mục lục](#muc-luc)
+
+## Implementation status — 17 October 2026
+
+The flexible material-assistant epic has completed its code and UI work through Tasks 1–8. Local verification on this branch: `npm.cmd run check` passed (111 frontend tests, 288 backend tests, lint, typecheck, OpenAPI check, and production builds); `npm.cmd run test:e2e` passed 58 desktop/mobile browser cases with 12 isolated integration cases skipped; `git diff --check` passed. The RAG evaluation command is available, and the versioned set contains 16 candidate cases. They remain unscored until a reviewer validates expected facts against an approved corpus; no accuracy results are claimed.
+
+The SQL regression fixtures and migrations are prepared but were not run because the local Supabase CLI/engine is unavailable in this environment. No remote or production Supabase operation was performed. Therefore the database ACL/RPC and real-corpus behavior remain unverified here. Before presenting measured retrieval quality, freeze corpus, model, prompt, chunker, and price policy; adjudicate the candidate set; then compare keyword-only, vector-only, and hybrid runs on the same isolated corpus. Proposed targets in Section 7 remain targets, not achieved results.

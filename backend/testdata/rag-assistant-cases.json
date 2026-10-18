@@ -1,0 +1,189 @@
+[
+  {
+    "id": "assistant-price-exact-01",
+    "question": "Tắc kê sắt 6x50 giá bao nhiêu?",
+    "intent": "price_lookup",
+    "sourceId": "candidate-catalog",
+    "questionFamilyId": "fastener-6x50-price",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần đối chiếu variant và giá với corpus được duyệt trước khi chấm."
+    }
+  },
+  {
+    "id": "assistant-price-accentless-01",
+    "question": "tak ke sat 6x50 gia bao nhieu?",
+    "intent": "price_lookup",
+    "sourceId": "candidate-catalog",
+    "questionFamilyId": "fastener-6x50-price",
+    "label": {
+      "status": "candidate",
+      "rationale": "Paraphrase không dấu; cần xác nhận alias trong catalog."
+    }
+  },
+  {
+    "id": "assistant-list-variants-01",
+    "question": "Cửa hàng có những loại tắc kê đạn nào? Kể cả loại chưa có giá.",
+    "intent": "catalog_list",
+    "sourceId": "candidate-catalog",
+    "questionFamilyId": "fastener-variant-list",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần khóa tập biến thể verified và tổng số từ catalog."
+    }
+  },
+  {
+    "id": "assistant-list-variants-what-specs-01",
+    "question": "Bulong có những quy cách gì?",
+    "intent": "catalog_list",
+    "sourceId": "candidate-catalog",
+    "questionFamilyId": "fastener-variant-list",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần xác nhận nhóm hàng, tập biến thể verified, nguồn và trạng thái giá từ catalog."
+    }
+  },
+  {
+    "id": "assistant-product-fact-01",
+    "question": "Quy cách 8 ly có đặc điểm gì?",
+    "intent": "product_info",
+    "sourceId": "candidate-document",
+    "questionFamilyId": "fastener-fact-8mm",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần đối chiếu nguồn tài liệu đã duyệt và citation."
+    }
+  },
+  {
+    "id": "assistant-advice-use-case-01",
+    "question": "Tôi cần bắt kệ vào tường gạch, nên chọn loại nào?",
+    "intent": "advice",
+    "sourceId": "candidate-document",
+    "questionFamilyId": "mounting-advice-masonry",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần người có chuyên môn xác nhận điều kiện sử dụng và căn cứ."
+    }
+  },
+  {
+    "id": "assistant-comparison-01",
+    "question": "So sánh tắc kê sắt 6x50 với 8x80 theo quy cách và giá.",
+    "intent": "comparison",
+    "sourceId": "candidate-catalog",
+    "questionFamilyId": "fastener-comparison",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần xác nhận đúng hai variant và các trường được phép so sánh."
+    }
+  },
+  {
+    "id": "assistant-multi-intent-01",
+    "question": "Có những loại tắc kê đạn nào và giá từng quy cách?",
+    "intent": "multi_intent",
+    "sourceId": "candidate-catalog",
+    "questionFamilyId": "fastener-list-with-price",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần kiểm tra đủ danh sách, giá hiện hành và đơn vị cho từng variant."
+    }
+  },
+  {
+    "id": "assistant-out-of-domain-01",
+    "question": "Ngày mai thời tiết thế nào?",
+    "intent": "out_of_domain",
+    "sourceId": "assistant-policy",
+    "questionFamilyId": "weather-out-of-domain",
+    "label": {
+      "status": "candidate",
+      "rationale": "Kiểm tra câu hỏi ngoài phạm vi vật tư và giá."
+    }
+  },
+  {
+    "id": "assistant-clarification-01",
+    "question": "Tắc kê sắt loại nào giá bao nhiêu?",
+    "intent": "clarification",
+    "sourceId": "candidate-catalog",
+    "questionFamilyId": "fastener-unspecified-size",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần xác nhận hệ thống hỏi lại kích thước hoặc quy cách."
+    }
+  },
+  {
+    "id": "assistant-follow-up-price-01",
+    "question": "Loại lớn hơn đó hiện giá bao nhiêu?",
+    "intent": "price_lookup",
+    "sourceId": "candidate-catalog",
+    "questionFamilyId": "fastener-follow-up-price",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần hội thoại trước đó để resolve tham chiếu; luôn đọc lại giá SQL."
+    }
+  },
+  {
+    "id": "assistant-price-refresh-01",
+    "question": "Tắc kê sắt 6x50 hiện có giá bao nhiêu sau khi bảng giá được cập nhật?",
+    "intent": "price_lookup",
+    "sourceId": "candidate-catalog",
+    "questionFamilyId": "fastener-6x50-price",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần xác minh giá được đọc mới từ SQL thay vì câu trả lời hoặc embedding cũ."
+    }
+  },
+  {
+    "id": "assistant-provider-unavailable-01",
+    "question": "Trang sổ nào ghi thông tin về tắc kê đạn 10 ly?",
+    "intent": "product_info",
+    "sourceId": "candidate-document",
+    "questionFamilyId": "fastener-source-page-10mm",
+    "label": {
+      "status": "candidate",
+      "rationale": "Kiểm tra hành vi an toàn khi provider hoặc truy xuất tài liệu lỗi."
+    }
+  },
+  {
+    "id": "assistant-advice-missing-constraints-01",
+    "question": "Tôi nên chọn loại tắc kê nào?",
+    "intent": "advice",
+    "sourceId": "candidate-document",
+    "questionFamilyId": "advice-missing-application-context",
+    "label": {
+      "status": "candidate",
+      "rationale": "Phải hỏi mục đích, vị trí và điều kiện trước khi gợi ý."
+    }
+  },
+  {
+    "id": "assistant-advice-document-constraint-01",
+    "question": "Tôi cần lắp ngoài trời và chịu nước, loại nào có tài liệu xác nhận?",
+    "intent": "advice",
+    "sourceId": "candidate-document",
+    "questionFamilyId": "advice-outdoor-water-resistance",
+    "label": {
+      "status": "candidate",
+      "rationale": "Chỉ chấm đúng khi mỗi quy cách được gợi ý có đoạn tài liệu nêu điều kiện đó."
+    }
+  },
+  {
+    "id": "assistant-comparison-missing-dimension-01",
+    "question": "So sánh tắc kê sắt 6x50 với 8x80.",
+    "intent": "comparison",
+    "sourceId": "candidate-catalog",
+    "questionFamilyId": "comparison-dimension-clarification",
+    "label": {
+      "status": "candidate",
+      "rationale": "Cần hỏi người dùng muốn so sánh giá, kích thước hay thuộc tính nào."
+    }
+  },
+  {
+    "id": "assistant-comparison-documented-dimension-01",
+    "question": "So sánh chất liệu tắc kê sắt 6x50 với 8x80.",
+    "intent": "comparison",
+    "sourceId": "candidate-document",
+    "questionFamilyId": "comparison-material-evidence",
+    "label": {
+      "status": "candidate",
+      "rationale": "Chỉ so sánh thuộc tính được tài liệu hiện hành nêu cho cả hai quy cách."
+    }
+  }
+]

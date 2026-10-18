@@ -43,14 +43,14 @@ async function chooseTestBolt(page: Page) {
 test.describe("isolated PriceApp integration", () => {
   test.skip(!enabled, "Set PRICEAPP_E2E_ENABLED and isolated test-project secrets to run authenticated E2E.");
 
-  test("owner login restores the session and reaches owner-only RAG pages", async ({ page }) => {
+  test("owner login restores the session and reaches catalog RAG administration", async ({ page }) => {
     await loginOwner(page);
     await page.reload();
     await expect(page.locator("#product-search")).toBeVisible();
 
-    const pagesResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/admin/rag/pages"));
+    const indexResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/admin/rag/index"));
     await page.goto("/rag-admin");
-    expect((await pagesResponse).status()).toBe(200);
+    expect((await indexResponse).status()).toBe(200);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 
@@ -137,7 +137,7 @@ test.describe("isolated PriceApp integration", () => {
     await expect(page.locator("#product-search")).toBeVisible();
     expect((await catalogResponse).status()).toBe(200);
 
-    const adminResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/admin/rag/pages"));
+    const adminResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/admin/rag/index"));
     await page.goto("/rag-admin");
     expect((await adminResponse).status()).toBe(403);
     await expect(page.getByRole("alert")).toBeVisible();

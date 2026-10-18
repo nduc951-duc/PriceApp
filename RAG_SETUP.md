@@ -1,100 +1,63 @@
-# RAG cho PriceApp
+# RAG catalog cho PriceApp
 
-## Luồng dữ liệu
+## Nguồn dữ liệu và cách trả lời
 
-`Câu hỏi -> embedding truy vấn -> pgvector + tìm tên/quy cách -> lấy giá hiện hành bằng SQL -> LLM trả lời có nguồn`.
+```text
+Câu hỏi giá ───────────────> bảng giá Supabase / SQL ──> giá hiện hành
+Câu hỏi quy cách ──────────> catalog Supabase ─────────> thuộc tính, đóng gói
+Câu hỏi tìm mặt hàng ──────> tìm tên + embedding catalog ──> dòng catalog đã xác minh
+```
 
-Chỉ văn bản OCR/bản chép **đã được chủ cửa hàng duyệt** và biến thể catalog có trạng thái `verified` được chunk và embedding. Giá không nằm trong nội dung chunk; `prices.amount`, ngưỡng số lượng, loại giá và hiệu lực luôn được truy vấn riêng từ PostgreSQL bằng ID sau khi tìm ra biến thể. Cập nhật giá vì vậy không cần tạo lại embedding.
+RAG chỉ dùng các dòng `product_variants`, `products`, `categories`, `product_aliases`, `packaging_options` và giá hiện hành liên quan trong Supabase. Với mỗi biến thể đã xác minh, indexer tạo văn bản từ nhóm hàng, tên và mô tả sản phẩm, bí danh, quy cách, thuộc tính và đóng gói; văn bản dài được chia thành các chunk có chồng lấp nhỏ trước khi embedding. Chỉ biến thể đang hoạt động, có trạng thái `verified`, thuộc sản phẩm và danh mục đang hoạt động mới đủ điều kiện. Giá không được đưa vào embedding. Câu hỏi giá và câu hỏi quy cách phổ biến được trả lời trực tiếp từ SQL, nên không cần dịch vụ embedding hoặc chat hoạt động.
 
-## Cấu hình Supabase và mô hình
+OCR, đọc ảnh để tạo nội dung, sửa bản chép, preview trang và các API trang OCR đã bị gỡ khỏi ứng dụng. Migration `202610180012_delete_retired_ocr_data.sql` xóa transcript OCR, các chunk/embedding OCR còn lưu và bảng `rag_page_texts`. Ảnh nguồn cùng liên kết provenance của danh mục vẫn được giữ; chúng không được đọc thành văn bản hay đưa vào embedding.
 
-1. Áp dụng migration theo thứ tự trong `supabase/migrations` qua `npx supabase db push` hoặc SQL Editor. Các migration RAG thêm schema/vector, revision và thu hồi nguồn, generation/checkpoint; `202610090001_rag_page_chunk_review.sql` thêm cấu hình chunk theo trang và source span; `202610100001_rag_conversations.sql` thêm hội thoại RLS theo user; `202610110001_rag_citation_provenance.sql` trả revision/span từ RPC retrieval; `202610120001_rag_feedback.sql` lưu đánh giá có RLS; `202610130001_harden_price_rpc_guards.sql` làm role check đóng khi profile vắng mặt và từ chối `expected_version` thiếu; `202610130002_reject_nonfinite_price_values.sql` từ chối giá/số lượng `NaN` và vô cực. Chunk OCR cũ chưa có revision sẽ bị ẩn cho đến khi index lại.
-2. Cài Ollama trên máy chạy backend, sau đó tải model embedding đa ngôn ngữ và model chat:
+## Triển khai trong 5 bước
+
+1. **Áp dụng migration.** Chạy các migration theo thứ tự trên project Supabase đã chọn, bao gồm `202610180009_catalog_only_rag.sql`, `202610180011_rag_products_description.sql` và `202610180012_delete_retired_ocr_data.sql`. Migration 009 chuyển RAG sang catalog; migration 011 đưa mô tả từ `products` vào tìm kiếm; migration 012 xóa transcript và embedding OCR đã lưu.
+
+2. **Kiểm tra dữ liệu catalog.** Mỗi mặt hàng cần có sản phẩm và danh mục đang hoạt động, biến thể `active = true`, `verification_status = 'verified'`, cùng `raw_specification` hoặc `display_name` rõ ràng. Điền `attributes` và `packaging_options` ngay trên các bảng catalog. Giá phải nằm ở bảng giá Supabase với ngày hiệu lực và trạng thái hiện hành.
+
+3. **Cấu hình embedding trên backend.** Cài Ollama cạnh backend rồi tải model tương thích:
 
    ```sh
    ollama pull bge-m3
    ollama pull qwen2.5:3b
    ```
 
-3. Sao chép `backend/.env.example` thành `backend/.env.local` và đặt biến RAG ở đó. Địa chỉ mặc định là `http://localhost:11434`. Nếu backend chạy trong container, dùng địa chỉ host/service mà container truy cập được. Frontend chỉ cần `NEXT_PUBLIC_API_BASE_URL` trỏ đến backend; không đưa provider key vào frontend.
-4. Tạo/kiểm tra hồ sơ owner một lần trong Supabase SQL Editor bằng UUID của đúng Auth user. Ví dụ sau đây là thao tác quản trị có chủ ý; thay UUID bằng `auth.users.id` đã xác minh, không lấy UUID từ client:
+   Trong `backend/.env.local`, cấu hình `RAG_AI_PROVIDER=ollama`, `RAG_AI_BASE_URL=http://localhost:11434`, `RAG_EMBEDDING_MODEL=bge-m3` và `RAG_CHAT_MODEL=qwen2.5:3b`. Embedding phải trả về 1.024 chiều. Chỉ backend giữ cấu hình provider. Không còn biến `RAG_OCR_MODEL`.
 
-   ```sql
-   insert into public.profiles (id, role)
-   values ('<AUTH_USER_UUID>', 'owner')
-   on conflict (id) do update set role = excluded.role, updated_at = now();
+4. **Dựng lại catalog index.** Chạy API và worker:
+
+   ```sh
+   npm run dev
+   npm run dev:worker --workspace backend
    ```
 
-   Không bật quyền tự sửa role qua client. Đăng nhập bằng tài khoản đó, mở `/rag-admin`, đối chiếu từng ảnh với bản chép trang, sửa OCR rồi bấm **Duyệt bản chép**. Dữ liệu trang chưa duyệt không được index. Tài khoản thiếu hồ sơ được xem như `viewer` trong RPC giá/catalog.
-5. Bấm **Kiểm tra kết nối** ở `/rag-admin` để xem riêng trạng thái Supabase, embedding 1.024 chiều và chat model. Chỉ sau khi cả ba sẵn sàng mới bấm **Tạo lại embedding**. Pipeline lưu chunk kèm trang nguồn, revision, hash, chunker version và model artifact. Nếu bị gián đoạn, mở lại trang và bấm **Chạy tiếp** để tiếp tục từ checkpoint.
-6. Mở `/questions`, hỏi thử; kết quả kết hợp semantic retrieval, PostgreSQL full-text/trigram catalog search, thuộc tính nói rõ trong câu hỏi, truy vấn giá SQL, LLM và citation tới chunk/revision/span. Nếu chọn một mức giá, nút **Chọn mức này** mở đúng biến thể ở màn hình bán hàng. App tải lại bảng giá khi thêm vào giỏ và khi sao chép báo giá; nếu giá hoặc bao bì đổi, cần xem lại rồi xác nhận.
-7. Có thể hỏi tiếp trong cùng cuộc trao đổi bằng câu như “còn loại 10 ly?”. Hội thoại giữ câu hỏi và metadata trạng thái/ID dưới RLS; câu trả lời cũ và số tiền không được dùng làm nguồn giá mới. Chỉ tên mặt hàng từ câu trước được nối khi câu follow-up thiếu tên; quy cách và loại giá phải được nêu lại.
-8. Nhân viên có thể đánh giá câu trả lời và chọn lý do cố định; `/rag-admin` tổng hợp phản hồi và xuất CSV. Bảng này giúp tìm lỗi cần xem, nhưng không thay thế người duyệt test labels hoặc kiểm tra các câu trả lời về tiền.
+   Sau khi cập nhật backend và áp dụng migration 011, vào `/rag-admin` chọn **Tạo lại embedding catalog** để tạo generation mới theo chunker v5. Mỗi chunk gắn với một biến thể đã xác minh và mang mô tả sản phẩm cùng quy cách/thuộc tính/đóng gói từ Supabase; giá vẫn đọc trực tiếp, không embedding. Worker xử lý các revision được xếp hàng do thay đổi catalog và nút quản trị báo rõ nếu revision đang chờ.
 
-## Hội thoại và chuyển sang báo giá
+5. **Kiểm tra kết quả thật.** Ở `/rag-admin`, xác nhận Supabase kết nối được, `embeddedVariants` bằng `catalogVariants`, không còn `missingVariants`, và model có 1.024 chiều. Trong `/questions` hoặc quầy bán hàng, hỏi thử một giá hiện hành và một quy cách/đóng gói. Trace của hai câu hỏi này phải có `embeddingModel: not_used`; kết quả giá phải khớp hàng giá Supabase. Hỏi một thuộc tính không có trong catalog phải báo thiếu dữ liệu, không tự đoán.
 
-```mermaid
-sequenceDiagram
-  actor N as Nhân viên
-  participant UI as /questions
-  participant API as Fastify RAG API
-  participant DB as Supabase/PostgreSQL
-  participant POS as Màn hình quầy
-  N->>UI: Hỏi mặt hàng hoặc quy cách
-  UI->>API: POST /rag/query + conversationId
-  API->>DB: Đọc câu hỏi trước theo conversation RLS
-  API->>DB: Lưu câu hỏi hiện tại
-  API->>DB: Tìm chunk/catalog và tải giá, version hiện hành
-  API->>DB: Lưu status/IDs (không lưu câu trả lời hoặc giá)
-  API-->>UI: Kết quả + citation chunk/revision/span
-  N->>UI: Chọn mức giá
-  UI->>POS: Mở variantId, priceId, priceVersion
-  POS->>DB: Tải lại catalog trước khi thêm hoặc sao chép
-  POS-->>N: Yêu cầu xem lại nếu giá/bao bì đã đổi
-  N->>POS: Xác nhận mức hiện tại rồi thêm vào báo giá
+## Khi câu hỏi vẫn chưa trả lời được
+
+- **Không thấy sản phẩm:** kiểm tra đúng tên/biệt danh, biến thể đã `verified`, và sản phẩm/danh mục đều `active`.
+- **Thiếu quy cách hoặc đóng gói:** bổ sung `raw_specification`, `attributes` hoặc `packaging_options` cho biến thể trong Supabase rồi chờ worker xử lý revision mới.
+- **Giá không khớp:** kiểm tra `prices.active`, `valid_from`, `valid_to`, loại giá, bảng giá không phải dữ liệu mẫu và nhà cung cấp còn hoạt động. Sửa giá không cần dựng lại embedding.
+- **`missingVariants` lớn hơn 0:** xem worker/job trong `/rag-admin`, kiểm tra embedding provider và chạy lại indexing sau khi provider sẵn sàng.
+- **Embedding không sẵn sàng:** tìm theo tên và tra giá SQL vẫn hoạt động; semantic search cần backend embedding và index cùng model.
+- **Chat không sẵn sàng:** câu hỏi giá và quy cách được hỗ trợ trực tiếp vẫn hoạt động. Câu hỏi tư vấn/so sánh cần bằng chứng catalog và model chat.
+
+Nguồn trả lời có thể chỉ rõ trang ảnh gắn với dòng catalog nếu tồn tại. Khi không có trang ảnh, ứng dụng hiển thị mã `product_variants` của dòng Supabase làm nguồn đối chiếu. Trang ảnh chỉ còn là provenance tùy chọn, không cấp nội dung cho RAG.
+
+## Kiểm tra trong repository
+
+```sh
+npm run lint
+npm run typecheck
+npm test
+npm run openapi:check
+npm run build
+npm run test:e2e
 ```
 
-```mermaid
-erDiagram
-  AUTH_USERS ||--o{ RAG_CONVERSATIONS : owns
-  RAG_CONVERSATIONS ||--o{ RAG_CONVERSATION_MESSAGES : contains
-  RAG_CONVERSATIONS {
-    uuid id PK
-    uuid owner_id FK
-    timestamptz created_at
-  }
-  RAG_CONVERSATION_MESSAGES {
-    uuid id PK
-    uuid conversation_id FK
-    text role
-    text content "user questions only"
-    jsonb metadata "allowlisted status and IDs"
-    timestamptz created_at
-  }
-```
-
-Đánh giá offline bằng các nhãn đã được người phụ trách duyệt và quan sát đã ghi nhận; runner không tự tạo nhãn hoặc benchmark:
-
-```powershell
-cd backend
-npx tsx src/rag/evaluation-runner.ts --cases <cases.json> --observations <observations.json> --output <report.json>
-```
-
-Muốn tách tập tune/test thì thêm `--seed <seed-cố-định> --tune-fraction <0..1>`. Đọc [hướng dẫn định dạng và báo cáo](backend/docs/RAG_EVALUATION.md); không công bố điểm nếu chưa có test set đã adjudicate.
-
-Chạy cả hai workspace bằng `npm run dev` từ root; backend mặc định ở port `4000`, frontend ở `3000`. Health API là `/api/v1/health`. Cấu hình origin web chính xác trong `FRONTEND_ORIGINS`. Xem [workspace runbook](docs/workspace-runbook.md) về deploy tách rời, đăng nhập, CI và E2E test an toàn.
-
-Có thể dùng API tương thích OpenAI thay cho Ollama bằng `RAG_AI_PROVIDER=openai-compatible`, đặt `RAG_AI_BASE_URL` đến API có `/embeddings` và `/chat/completions`, đặt `RAG_AI_API_KEY`, `RAG_EMBEDDING_MODEL` và `RAG_CHAT_MODEL`. Model embedding phải trả đúng 1.024 số cho mỗi văn bản để khớp migration.
-
-## Phạm vi và giới hạn hiện tại
-
-- App chưa tự OCR ảnh. Màn hình `/rag-admin` cung cấp quy trình nhập/soát bản chép bằng tay cho 13 trang để đảm bảo nội dung được duyệt trước khi embedding.
-- Catalog chỉ index các biến thể `verified`; những mặt hàng chưa duyệt không được xem là bằng chứng chuẩn.
-- Mỗi câu trả lời trả về số chunk vector, số kết quả lexical, trang nguồn và giá chính xác lấy từ bảng SQL.
-- Thay nội dung OCR hoặc catalog đã xác minh thì chạy lại index. Chỉ sửa giá thì không cần.
-- Lưu bản nháp làm chunk OCR của revision cũ biến mất ngay. **Thu hồi cả trang** ẩn mọi chunk OCR/catalog gắn trang đó; biến thể inactive/unverified cũng không còn dùng làm chunk tìm kiếm. Service worker giữ HTML shell chung của `/` và asset build để mở POS đọc snapshot sau khi tải lại khi mất mạng; không lưu API hay dữ liệu theo phiên vào Cache Storage. Đăng xuất xóa snapshot và cache.
-- Bộ [20 câu hỏi L1](docs/RAG_L1_CASES.md) là ứng viên cho vòng thử đầu tiên; cần đối chiếu trang nguồn và khóa đáp án trước khi tính độ đúng.
-
-## Đề xuất đánh giá đồ án
-
-Lập tập câu hỏi có đáp án chuẩn gồm tên có dấu/không dấu, biệt danh, quy cách gần giống nhau, hỏi giá sỉ/lẻ, hỏi trang nguồn và câu không có trong dữ liệu. So sánh keyword-only với hybrid RAG bằng Recall@k/MRR cho retrieval, độ đúng giá và citation accuracy cho câu trả lời, cùng latency và số token/chi phí của LLM. Giữ nguyên tập câu hỏi khi thay model hoặc cách chunk để kết quả so sánh được.
+Unit/E2E mock xác nhận luồng trong ứng dụng, không thay thế việc áp dụng migration hay xác minh dữ liệu trực tiếp trên project Supabase. Hướng dẫn môi trường và E2E có đăng nhập ở [workspace runbook](docs/workspace-runbook.md).

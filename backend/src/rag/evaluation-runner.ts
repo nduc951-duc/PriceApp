@@ -6,6 +6,7 @@ import {
   evaluateObservations,
   splitEvaluationCases,
   type EvaluationCase,
+  evaluationIntents,
   type EvaluationMetrics,
   type EvaluationObservation,
 } from "./evaluation.js";
@@ -16,17 +17,23 @@ const labelSchema = z.discriminatedUnion("status", [
     status: z.literal("adjudicated"),
     adjudicator: z.string().min(1),
     expectedOutcome: z.enum(["answer", "abstain"]),
+    expectedIntent: z.enum(evaluationIntents).optional(),
     relevantVariantIds: z.array(z.number().int().positive()),
     expectedVariantId: z.number().int().positive().optional(),
     expectedPackageId: z.string().optional(),
     expectedTier: z.string().optional(),
     expectedAmount: z.number().finite().optional(),
+    expectedUnit: z.string().optional(),
     expectedCitationIds: z.array(z.string()).optional(),
+    expectedListVariantIds: z.array(z.number().int().positive()).optional(),
+    expectedListTotal: z.number().int().nonnegative().optional(),
   }).strict(),
 ]);
 
 const casesSchema = z.array(z.object({
   id: z.string().min(1),
+  question: z.string().min(1).max(1000).optional(),
+  intent: z.enum(evaluationIntents).optional(),
   sourceId: z.string().min(1),
   questionFamilyId: z.string().min(1),
   label: labelSchema.optional(),
@@ -35,12 +42,17 @@ const casesSchema = z.array(z.object({
 const observationsSchema = z.array(z.object({
   caseId: z.string().min(1),
   retrievedVariantIds: z.array(z.number().int().positive()),
+  intent: z.enum(evaluationIntents).optional(),
+  listedVariantIds: z.array(z.number().int().positive()).optional(),
+  listedTotal: z.number().int().nonnegative().optional(),
+  listingComplete: z.boolean().optional(),
   answer: z.object({
     abstained: z.boolean(),
     variantId: z.number().int().positive().optional(),
     packageId: z.string().optional(),
     tier: z.string().optional(),
     amount: z.number().finite().optional(),
+    unit: z.string().optional(),
     citationIds: z.array(z.string()).optional(),
   }).strict().optional(),
   latencyMs: z.number().finite().nonnegative(),
@@ -193,8 +205,17 @@ export function parseEvaluationCliArgs(args: string[]): {
 }
 
 async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
+    process.stdout.write([
+      "Usage: npm run eval:rag -- --cases <file> --observations <file> --output <file> [--seed <value> --tune-fraction <0..1>]",
+      "Writes the full JSON report to --output and stdout.",
+    ].join("\n") + "\n");
+    return;
+  }
   try {
-    await runEvaluationFiles(parseEvaluationCliArgs(process.argv.slice(2)));
+    const report = await runEvaluationFiles(parseEvaluationCliArgs(args));
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;

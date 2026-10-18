@@ -4,7 +4,7 @@ import type { ApiResponse } from "./generated/api-types";
 const failedCheck = z.strictObject({ ok: z.literal(false), detail: z.string().min(1) });
 const databaseCheck = z.union([
   failedCheck,
-  z.strictObject({ ok: z.literal(true), detail: z.string().min(1), count: z.number().int().nonnegative() }),
+  z.strictObject({ ok: z.literal(true), detail: z.string().min(1), count: z.number().int().nonnegative(), catalogVariants: z.number().int().nonnegative().optional(), embeddedVariants: z.number().int().nonnegative().optional(), missingVariants: z.number().int().nonnegative().optional(), activeGeneration: z.number().int().positive().nullable().optional() }),
 ]);
 const embeddingCheck = z.union([
   failedCheck,

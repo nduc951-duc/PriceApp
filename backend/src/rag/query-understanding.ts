@@ -19,6 +19,22 @@ export interface UnderstandQueryOptions {
   aliases?: Record<string, string>;
 }
 
+/** Remove the requested catalog operation before interpreting product identity. */
+export function catalogIdentityQuestion(question: string): string {
+  return question.replace(/(?:thông\s+tin|thong\s+tin|quy\s+cách|quy\s+cach|kích\s+thước|kich\s+thuoc|đóng\s+gói|dong\s+goi|chất\s+liệu|chat\s+lieu|đơn\s+vị|don\s+vi)/giu, " ")
+    .replace(/\s+(?:(?:thế|the)\s+nào|ra\s+sao|là\s+gì|la\s+gi|có\s+không|co\s+khong|được\s+không|duoc\s+khong)[?!.]*$/giu, " ")
+    .replace(/\s+/gu, " ").trim();
+}
+
+export interface SpecificPriceLookupHint {
+  productText: string;
+  specifications: string[];
+  material?: string;
+  tier?: PriceTier;
+  quantity?: number;
+  unit?: string;
+}
+
 export type HardFilters = {
   dimensions?: string[];
   specCodes?: string[];
@@ -43,6 +59,7 @@ function normalizeWithOffsets(input: string): NormalizedText {
     sourceIndex += character.length;
     const normalized = character
       .replace(/[đĐ]/g, (letter) => letter === "Đ" ? "D" : "d")
+      .replace(/×/g, "x")
       .normalize("NFD")
       .replace(/\p{M}/gu, "")
       .toLowerCase();
@@ -95,9 +112,9 @@ function normalizedPattern(value: string): string {
 }
 
 const STOP_WORDS = new Set([
-  "bao", "gia", "cho", "minh", "toi", "hoi", "can", "mua", "lay", "loai", "nao",
+  "bao", "gia", "cho", "minh", "toi", "hoi", "can", "mua", "lay", "loai", "nao", "nhung", "cac", "tung", "moi", "gi",
   "nhieu", "tien", "xin", "vui", "long", "voi", "la", "trang", "co", "thong", "tin",
-  "ve", "san", "pham", "quy", "cach", "mat", "hang", "duoc", "tai", "o", "nay",
+  "ve", "san", "pham", "quy", "cach", "mat", "hang", "duoc", "tai", "o", "nay", "cua", "x",
 ]);
 const UNIT_PATTERN = /\b(?:kg|g|met|m|cm|mm|lit|l|cai|con|tam|cay|bich|bo|cuon|hop|thung|goi)\b/gu;
 const QUANTITY_PATTERN = /\b(?:mua|lay|can|so\s+luong)\s+(\d+(?:[.,]\d+)?)(?:\s*(kg|g|met|m|cm|mm|lit|l|cai|con|tam|cay|bich|bo|cuon|hop|thung|bao|goi))?\b/gu;
@@ -167,6 +184,25 @@ export function understandQuery(input: string, options: UnderstandQueryOptions =
   };
 }
 
+/** Narrow fast-path hint; all other natural language is left for semantic planning. */
+export function specificPriceLookupHint(input: string): SpecificPriceLookupHint | null {
+  const parsed = understandQuery(input);
+  const normalized = normalizeWithOffsets(input).value;
+  const asksPrice = /\b(?:gia|bao\s+nhieu|bao\s+gia)\b/u.test(normalized);
+  const asksForMore = /\b(?:so\s+sanh|doi\s+chieu|liet\s+ke|bao\s+nhieu\s+loai|loai\s+nao|(?:cac|tung|moi)\s+(?:quy\s+cach|loai)|quy\s+cach\s+nao|nen\s+chon|tu\s+van|va)\b/u.test(normalized);
+  const specifications = [...parsed.dimensions, ...parsed.specCodes];
+  const productText = [...parsed.aliases, ...parsed.nameTerms].join(" ").trim();
+  if (!asksPrice || asksForMore || !productText || specifications.length !== 1 || parsed.tierConflict) return null;
+  return {
+    productText,
+    specifications,
+    ...(parsed.material ? { material: parsed.material } : {}),
+    ...(parsed.tier ? { tier: parsed.tier } : {}),
+    ...(parsed.quantity !== undefined ? { quantity: parsed.quantity } : {}),
+    ...(parsed.unit ? { unit: parsed.unit } : {}),
+  };
+}
+
 /** Carry prior product words into a clear follow-up without carrying old specs, tiers, or quantities. */
 export function resolveFollowUpQuestion(previousQuestion: string | undefined, currentQuestion: string): string {
   if (!previousQuestion) return currentQuestion;
@@ -196,13 +232,34 @@ export function toHardFilters(query: QueryUnderstanding): HardFilters {
   };
 }
 
+function scalarDimensionValue(value: string): string | null {
+  const normalized = normalizeWithOffsets(value).value.replace(/\s+/gu, " ").trim();
+  return normalized.match(/^(\d+(?:[.,]\d+)?)\s*(?:ly|li|mm|cm|m)$/u)?.[1]?.replace(",", ".") ?? null;
+}
+
+/** True when a measured value names one dimension of a composite catalog specification. */
+export function isPartialDimension(value: string): boolean {
+  return scalarDimensionValue(value) !== null;
+}
+
+function matchesDimension(requested: string, available: string[]): boolean {
+  if (available.some((value) => sameText(value, requested))) return true;
+  const scalar = scalarDimensionValue(requested);
+  if (scalar === null) return false;
+  return available.some((value) => {
+    const normalized = normalizeWithOffsets(value).value.replace(/\s+/gu, " ").trim();
+    const firstPart = normalized.match(/^(\d+(?:[.,]\d+)?)\s*x\s*\d/u)?.[1]?.replace(",", ".");
+    return firstPart === scalar;
+  });
+}
+
 function sameText(left: string, right: string): boolean {
   return normalizeWithOffsets(left).value.trim() === normalizeWithOffsets(right).value.trim();
 }
 
 export function matchesHardFilters(candidate: FilterableAttributes, query: QueryUnderstanding): boolean {
   const filters = toHardFilters(query);
-  if (filters.dimensions && (!candidate.dimensions || filters.dimensions.some((value) => !candidate.dimensions?.some((item) => sameText(item, value))))) return false;
+  if (filters.dimensions && (!candidate.dimensions || filters.dimensions.some((value) => !matchesDimension(value, candidate.dimensions ?? [])))) return false;
   if (filters.specCodes && (!candidate.specCodes || filters.specCodes.some((value) => !candidate.specCodes?.some((item) => sameText(item, value))))) return false;
   if (filters.material && (!candidate.material || !sameText(candidate.material, filters.material))) return false;
   if (filters.unit && (!candidate.unit || !sameText(candidate.unit, filters.unit))) return false;

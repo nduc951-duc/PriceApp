@@ -12,6 +12,7 @@ export const publicCatalogResponseSchema = z.object({
 export const customerOrderBodySchema = z.strictObject({
   customerName: z.string().trim().min(2).max(120),
   phone: z.string().trim().min(8).max(24).regex(/^[0-9+() .-]+$/),
+  idempotencyKey: z.uuid(),
   deliveryAddress: z.string().trim().max(500).optional(),
   deliveryNotes: z.string().trim().max(1000).optional(),
   website: z.string().max(0).optional(),
@@ -23,7 +24,7 @@ export const customerOrderListSchema = z.object({ requests: z.array(z.object({
   id: z.uuid(), reference: z.string(), status: z.enum(["pending_confirmation", "contacted", "confirmed", "cancelled"]),
   customerName: z.string(), phone: z.string(), deliveryAddress: z.string().nullable(), deliveryNotes: z.string().nullable(),
   subtotal: z.number().nonnegative(), createdAt: z.string(), items: z.array(z.object({ productName: z.string(), variantName: z.string(),
-    packaging: z.string(), priceType: z.enum(["retail", "wholesale"]), quantity: z.number().positive(), unitPrice: z.number().nonnegative(), lineTotal: z.number().nonnegative(), unit: z.string() })),
+    packaging: z.string(), packageQuantity: z.number().positive(), priceType: z.enum(["retail", "wholesale"]), quantity: z.number().positive(), unitPrice: z.number().nonnegative(), lineTotal: z.number().nonnegative(), unit: z.string() })),
 })) });
 export const customerOrderStatusBodySchema = z.strictObject({ status: z.enum(["contacted", "confirmed", "cancelled"]) });
 export const customerOrderIdParamsSchema = z.strictObject({ requestId: z.uuid() });
