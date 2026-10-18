@@ -182,11 +182,6 @@ test("customer sees a validated comparison block and its cited source", async ({
     sources: [{ pageNumber: 11, chunkId: 11, chunkKey: "page:11:variant:687:0", sourceRevision: 1, sourceSpan: { start: 0, end: 20 }, excerpt: "Verified material detail", evidenceKind: "verified_catalog", verifiedVariantId: 687 }],
     retrieval: { vectorChunks: 2, lexicalProducts: 2, embeddingModel: "bge-m3" },
   }) }));
-  let submittedFeedback: unknown;
-  await page.route("**/api/v1/public/rag/feedback", async (route) => {
-    submittedFeedback = route.request().postDataJSON();
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ saved: true }) });
-  });
 
   await page.goto("/shop");
   await page.locator("#price-question").fill("compare material details");
@@ -196,13 +191,27 @@ test("customer sees a validated comparison block and its cited source", async ({
   await expect(page.getByText("The source describes different material details for each option.")).toBeVisible();
   await expect(page.getByLabel("Hỏi đáp với AI").getByText("82.000 ₫ / 1 bánh/cái", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Trang 11" })).toBeVisible();
-  const feedback = page.getByTestId("public-rag-feedback");
-  await page.getByTestId("public-rag-feedback-negative").click();
-  await page.getByTestId("public-rag-feedback-reason").selectOption("wrong_price_or_unit");
-  await page.getByTestId("public-rag-feedback-submit").click();
-  await expect(feedback.getByRole("status")).toBeVisible();
-  expect(submittedFeedback).toEqual({ feedbackHandle: "response-handle", helpful: false, reason: "wrong_price_or_unit" });
+  await expect(page.getByText("Câu trả lời này có hữu ích không?")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Các đoạn dữ liệu tìm thấy" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("grounded-comparison.png"), fullPage: true });
+});
+
+test("retrieval panel shows only the first four sources in API order", async ({ page }) => {
+  await page.route("**/api/v1/public/catalog", route => route.fulfill({ json: { items: [], syncedAt: new Date().toISOString() } }));
+  await page.route("**/api/v1/public/rag/query", route => route.fulfill({ json: {
+    status: "answered", answer: "Found catalog evidence", publicFeedbackHandle: "handle", items: [],
+    sources: Array.from({ length: 6 }, (_, index) => ({ chunkId: index + 1, chunkKey: `catalog:${index + 1}`, pageNumber: 13, excerpt: `Retrieved chunk ${index + 1}`, evidenceKind: "verified_catalog", verifiedVariantId: 320 + index, sourceRevision: null, sourceSpan: null })),
+    retrieval: { vectorChunks: 6, lexicalProducts: 1, embeddingModel: "bge-m3" },
+  } }));
+  await page.goto("/shop");
+  await page.locator("#price-question").fill("silicon a500");
+  await page.locator("#price-question").press("Enter");
+  const panel = page.getByRole("region", { name: "Các đoạn dữ liệu tìm thấy" });
+  await expect(panel.getByRole("listitem")).toHaveCount(4);
+  await expect(panel.getByRole("listitem").first()).toContainText("Retrieved chunk 1");
+  await expect(panel.getByRole("listitem").last()).toContainText("Retrieved chunk 4");
+  await expect(page.getByText("Retrieved chunk 5", { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("public-rag-feedback")).toHaveCount(0);
 });
 
 test("catalog listing uses structured totals even when the answer wording changes", async ({ page }) => {

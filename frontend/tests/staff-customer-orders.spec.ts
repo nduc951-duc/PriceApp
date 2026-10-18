@@ -66,6 +66,8 @@ async function openStaffOrders(page: Page, failFirstSubmission = false, fromQuot
 }
 
 test("staff creates an order from current catalog and confirms it in the inbox", async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
   await page.emulateMedia({ colorScheme: "dark" });
   const { form, submissions } = await openStaffOrders(page);
   await expect(form.locator(":scope > div").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
@@ -74,6 +76,9 @@ test("staff creates an order from current catalog and confirms it in the inbox",
   await form.getByRole("button", { name: "Gửi yêu cầu đặt hàng" }).click();
   const inbox = page.getByRole("dialog", { name: "Yêu cầu đặt hàng" });
   await expect(inbox).toContainText("DH-STAFF-01");
+  await expect(inbox.locator("thead > tr > th")).toHaveCount(4);
+  await expect(inbox.locator("thead > th")).toHaveCount(0);
+  expect(consoleErrors.filter(message => /hydration|cannot be a child|cannot contain a nested/i.test(message))).toEqual([]);
   await expect(inbox).toContainText("Khách tại quầy");
   await expect(inbox.locator(":scope > div").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await inbox.getByRole("button", { name: "Xác nhận đơn", exact: true }).click();

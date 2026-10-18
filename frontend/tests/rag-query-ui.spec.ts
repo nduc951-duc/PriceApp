@@ -107,9 +107,10 @@ test("asking the AI submits the question and renders its cited price", async ({ 
   expect(submittedQuestion).toBe("Giá lẻ bulong có tán 10 ly x 1T là bao nhiêu?");
   await expect(page.locator("body")).toContainText("34.000");
   await expect(page.locator("body")).toContainText("34.000 ₫ / 10 bộ/bịch");
-  await expect(page.getByRole("link", { name: "Trang 5" })).toBeVisible();
-  await page.getByText("Đoạn catalog đã truy xuất (1)", { exact: true }).click();
-  await expect(page.locator("details").filter({ hasText: "Đoạn catalog đã truy xuất" })).not.toContainText("undefined");
+  await expect(page.getByRole("region", { name: "Các đoạn dữ liệu tìm thấy" }).getByRole("link", { name: "Trang 5" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Các đoạn dữ liệu tìm thấy" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Các đoạn dữ liệu tìm thấy" })).not.toContainText("undefined");
+  await expect(page.getByText("Câu trả lời này có hữu ích không?")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Chọn mức này" })).toHaveAttribute("href", "/staff?variantId=6&priceId=2&priceVersion=1");
 });
 
