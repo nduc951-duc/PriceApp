@@ -48,6 +48,8 @@ set search_path = public, extensions
 as $$
 declare
   v_rows jsonb;
+  v_batch_rows jsonb;
+  v_total_count integer;
   v_hash text;
 begin
   if public.get_current_app_role() <> 'owner' then
@@ -122,13 +124,21 @@ begin
     ) order by generated.variant_id), '[]'::jsonb)
   into v_rows from generated;
 
+  v_total_count := jsonb_array_length(v_rows);
+  select coalesce(jsonb_agg(batch_rows.value order by batch_rows.ordinality), '[]'::jsonb)
+  into v_batch_rows
+  from jsonb_array_elements(v_rows) with ordinality as batch_rows(value, ordinality)
+  where batch_rows.ordinality <= 100;
+
   v_hash := md5('demo-price-v1|' || v_rows::text || '|' || (select count(*) from public.demo_price_batches)::text);
   return jsonb_build_object(
     'batchId', v_hash,
     'snapshotHash', v_hash,
     'ruleVersion', 'demo-price-v1',
-    'count', jsonb_array_length(v_rows),
-    'items', v_rows
+    'count', jsonb_array_length(v_batch_rows),
+    'totalCount', v_total_count,
+    'remainingCount', greatest(0, v_total_count - jsonb_array_length(v_batch_rows)),
+    'items', v_batch_rows
   );
 end;
 $$;

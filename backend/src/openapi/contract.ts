@@ -22,6 +22,7 @@ const priceWriteResponse = z.object({ amount: z.number(), version: z.number().in
 const priceUpdateResponse = priceWriteResponse.extend({ historyId: id });
 const demoPricePreviewResponse = z.object({
   batchId: z.string(), snapshotHash: z.string(), ruleVersion: z.string(), count: z.number().int().nonnegative(),
+  totalCount: z.number().int().nonnegative(), remainingCount: z.number().int().nonnegative(),
   items: z.array(z.object({ variantId: id, productId: id, packagingId: id, quantity: z.number(), unit: text,
     amount: z.number(), method: z.enum(["same_package_median", "fallback_fixture"]), referencePriceIds: z.array(id) })),
 });

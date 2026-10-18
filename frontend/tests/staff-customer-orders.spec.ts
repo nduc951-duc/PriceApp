@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const catalog = [{ category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", productCode: "VTK-420", aliases: [], packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "retail", minimumQuantity: 1, price: 15000 }];
+const catalog = [{ category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", productCode: "VTK-420", aliases: [], packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "retail", minimumQuantity: 1, price: 15000 , isDemo: false, purchasable: true}];
 type Submission = { customerName: string; phone: string; idempotencyKey: string; items: Array<{ priceId: number; version: number; quantity: number }> };
 
 async function openStaffOrders(page: Page, failFirstSubmission = false, fromQuote = false) {
@@ -17,7 +17,7 @@ async function openStaffOrders(page: Page, failFirstSubmission = false, fromQuot
   await page.route("**/api/v1/**", async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/v1/public/catalog") return route.fulfill({ json: { items: catalog, syncedAt: "2026-10-18T00:00:00Z" } });
-    if (path === "/api/v1/catalog") return route.fulfill({ json: { entries: [{ categoryId: 1, productId: 1, variantId: 1, name: "Vít tự khoan", category: "Vít", spec: "4 x 20 mm", displayName: "Đầu dù 4x20", sourcePages: [], sourceFiles: [] }], prices: [{ id: 21, priceId: 21, categoryId: 1, productId: 1, variantId: 1, packagingId: 1, name: "Vít tự khoan", category: "Vít", variantDisplayName: "Đầu dù 4x20", spec: "4 x 20 mm", variantSpec: "4 x 20 mm", packageName: "Gói 100 cái", packageQuantity: 100, packageNote: "", priceType: "retail", minimumQuantity: 1, price: 15000, unit: "cái", supplier: "Sổ", sourcePages: [], sourceFiles: [], status: "verified", version: 3 }], syncedAt: "2026-10-18T00:00:00Z" } });
+    if (path === "/api/v1/catalog") return route.fulfill({ json: { entries: [{ categoryId: 1, productId: 1, variantId: 1, name: "Vít tự khoan", category: "Vít", spec: "4 x 20 mm", displayName: "Đầu dù 4x20", sourcePages: [], sourceFiles: [] }], prices: [{ id: 21, priceId: 21, categoryId: 1, productId: 1, variantId: 1, packagingId: 1, name: "Vít tự khoan", category: "Vít", variantDisplayName: "Đầu dù 4x20", spec: "4 x 20 mm", variantSpec: "4 x 20 mm", packageName: "Gói 100 cái", packageQuantity: 100, packageNote: "", priceType: "retail", minimumQuantity: 1, price: 15000, isDemo: false, purchasable: true, unit: "cái", supplier: "Sổ", sourcePages: [], sourceFiles: [], status: "verified", version: 3 }], syncedAt: "2026-10-18T00:00:00Z" } });
     if (path === "/api/v1/me") return route.fulfill({ json: { userId: user.id, role: "owner" } });
     if (path === "/api/v1/customer-order-requests" && route.request().method() === "POST") {
       submissions.push(route.request().postDataJSON() as Submission);

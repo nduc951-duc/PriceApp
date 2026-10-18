@@ -17,6 +17,12 @@ describe("customer cart", () => {
     ]);
   });
 
+  it("refuses demo prices and excludes them from the estimated subtotal", () => {
+    const demo = { ...retail, priceId: 23, isDemo: true, purchasable: false };
+    expect(addToCustomerCart([], demo)).toEqual([]);
+    expect(customerCartSubtotal([{ priceId: 23, version: 3, quantity: 2 }], [demo]))
+      .toEqual({ subtotal: 0, stalePriceIds: [23] });
+  });
   it("clamps changed quantities to the public minimum and removes an empty line", () => {
     const cart: CustomerCartLine[] = [{ priceId: 22, version: 3, quantity: 5 }];
     expect(setCustomerCartQuantity(cart, wholesale, 2)[0].quantity).toBe(5);

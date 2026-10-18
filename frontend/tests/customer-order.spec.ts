@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const prices = [
-  { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "retail", minimumQuantity: 1, price: 15000 },
-  { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 22, version: 3, priceType: "wholesale", minimumQuantity: 5, price: 12000 },
+  { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "retail", minimumQuantity: 1, price: 15000 , isDemo: false, purchasable: true},
+  { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 22, version: 3, priceType: "wholesale", minimumQuantity: 5, price: 12000 , isDemo: false, purchasable: true},
 ];
 
 async function mockGuestApi(page: Page) {
@@ -16,6 +16,16 @@ async function mockGuestApi(page: Page) {
 }
 
 test.describe("public customer ordering", () => {
+  test("shows demo prices with a warning and no add-to-cart action", async ({ page }) => {
+    const demo = { ...prices[0], priceId: 23, isDemo: true, purchasable: false };
+    await page.route("**/api/v1/public/catalog", route => route.fulfill({ json: { items: [demo], syncedAt: new Date().toISOString() } }));
+    await page.goto("/shop");
+    const catalog = page.getByRole("region", { name: "Bảng giá cửa hàng" });
+    await expect(catalog.getByText(/demo/i).first()).toBeVisible();
+    await expect(catalog.getByText(/chưa phải giá bán chính thức/i)).toBeVisible();
+    await expect(catalog.getByRole("button", { name: /thêm/i })).toHaveCount(0);
+  });
+
   test("groups retail and wholesale packages under one specification without changing the selected price", async ({ page }, testInfo) => {
     await page.route("**/api/v1/public/catalog", route => route.fulfill({ json: { items: [prices[0], { ...prices[1], packaging: "Thùng 1000 cái", packageQuantity: 1000 }], syncedAt: new Date().toISOString() } }));
     await page.goto("/shop");

@@ -4412,6 +4412,16 @@
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
+                    "totalCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "remainingCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "items": {
                       "type": "array",
                       "items": {
@@ -4475,6 +4485,8 @@
                     "snapshotHash",
                     "ruleVersion",
                     "count",
+                    "totalCount",
+                    "remainingCount",
                     "items"
                   ]
                 }

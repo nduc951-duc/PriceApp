@@ -13,7 +13,7 @@ const catalog = {
     id: 77, priceId: 77, categoryId: 1, productId: 2, variantId: 3, packagingId: 4,
     name: "Test Bolt", category: "Test", variantDisplayName: "Test Bolt 8ly 3f", spec: "8ly 3f",
     variantSpec: "8ly 3f", packageName: "Gói", packageQuantity: 1, packageNote: "",
-    priceType: "retail", minimumQuantity: 1, price: 2500, unit: "cái", supplier: "Test supplier",
+    priceType: "retail", minimumQuantity: 1, price: 2500, isDemo: false, purchasable: true, unit: "cái", supplier: "Test supplier",
     sourcePages: [], sourceFiles: [], status: "verified", version: 1,
   }],
 };

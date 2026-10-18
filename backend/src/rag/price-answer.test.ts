@@ -13,6 +13,16 @@ describe("priceAnswer", () => {
   it("does not invent a price when the SQL result is empty", () => {
     expect(priceAnswer([{ productName: "Tắc kê", variant: "6x50", sourcePages: [1], prices: [] }])).toContain("Chưa có giá hiện hành");
   });
+  it("labels demo prices and does not cite a real page or supplier as their source", () => {
+    const answer = priceAnswer([{ productName: "Demo product", variant: "M6", sourcePages: [1], prices: [
+      { amount: 50000, priceType: "retail", packagingName: "Box", minimumQuantity: 1, isDemo: true, priceList: "Demo list", supplier: "Demo supplier" },
+    ] }]);
+    expect(answer).toContain("Giá demo");
+    expect(answer).toContain("Giá giả lập");
+    expect(answer).not.toContain("trang 1");
+    expect(answer).not.toContain("Demo list");
+    expect(answer).not.toContain("Demo supplier");
+  });
   it("preserves fractional digits in the authoritative SQL amount", () => {
     const answer = priceAnswer([{ productName: "Tắc kê", variant: "6x50", sourcePages: [], prices: [
       { amount: 12345.67, priceType: "retail", packagingName: "Hộp", minimumQuantity: 1 },

@@ -7,7 +7,7 @@ const catalogPrice = {
   id: 71, priceId: 71, categoryId: 2, productId: 8, variantId: 13, packagingId: 34,
   name: longName, category: "Vật tư", variantDisplayName: longSpec, spec: longSpec, variantSpec: longSpec,
   packageName: "Bịch-" + "quy cách không khoảng trắng".replaceAll(" ", "").repeat(5), packageQuantity: 10,
-  packageNote: "", priceType: "retail", minimumQuantity: 1, price: 15000, unit: "cái", supplier: "Sổ giá",
+  packageNote: "", priceType: "retail", minimumQuantity: 1, price: 15000, isDemo: false, purchasable: true, unit: "cái", supplier: "Sổ giá",
   sourcePages: [2], sourceFiles: [], status: "verified", version: 7, validFrom: "2026-10-01T00:00:00.000Z", validTo: null,
 };
 const catalog = {
@@ -18,7 +18,7 @@ const catalog = {
 const publicCatalogItem = {
   category: "Vật tư", name: longName, variant: longSpec, specification: longSpec, productCode: "VT-13", aliases: [],
   packaging: catalogPrice.packageName, packageQuantity: 10, unit: "cái", priceId: 71, version: 7,
-  priceType: "retail", minimumQuantity: 1, price: 15000,
+  priceType: "retail", minimumQuantity: 1, price: 15000, isDemo: false, purchasable: true,
 };
 
 async function mockStaff(page: Page) {

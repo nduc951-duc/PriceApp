@@ -15,7 +15,7 @@ import { DemoPriceLabel } from "@/components/demo-price-label";
 
 type StaffRole = "owner" | "editor" | "viewer";
 type CatalogSnapshot = { entries: CatalogEntry[]; prices: CatalogPrice[]; syncedAt: string };
-type DemoPricePreview = { batchId: string; snapshotHash: string; ruleVersion: string; count: number; items: Array<{ variantId: number; productId: number; packagingId: number; quantity: number; unit: string; amount: number; method: "same_package_median" | "fallback_fixture"; referencePriceIds: number[] }> };
+type DemoPricePreview = { batchId: string; snapshotHash: string; ruleVersion: string; count: number; totalCount: number; remainingCount: number; items: Array<{ variantId: number; productId: number; packagingId: number; quantity: number; unit: string; amount: number; method: "same_package_median" | "fallback_fixture"; referencePriceIds: number[] }> };
 
 function verificationLabel(status: CatalogEntry["verificationStatus"] | CatalogPrice["status"]) {
   return status === "verified" ? "Đã xác minh" : status === "unreadable" ? "Khó đọc" : "Cần đối chiếu";
@@ -217,11 +217,11 @@ export function StaffPriceManagement() {
         <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold text-amber-950">Giá demo cho mặt hàng chưa có giá</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-amber-900">Chỉ tạo giá giả lập cho quy cách đã xác minh, đang hoạt động, có bao bì và chưa có giá thật hiện hành. Nhãn demo sẽ xuất hiện ở catalog và chatbot; giá này không dùng để đặt hàng.</p></div>
           <div className="flex flex-wrap gap-2"><Button color="light" disabled={!online || demoBusy} onClick={() => void previewDemoPrices()}>{demoBusy ? "Đang xử lý…" : "Xem trước"}</Button>{demoBatchId && <Button color="light" disabled={!online || demoBusy} onClick={() => void rollbackDemoPrices()}>Hoàn tác lô gần nhất</Button>}</div>
         </div>
-        {demoPreview && <div className="mt-4 rounded-lg border border-amber-200 bg-white p-4"><p className="font-medium">Có {demoPreview.count} quy cách đủ điều kiện · quy tắc {demoPreview.ruleVersion}</p>
-          {demoPreview.count > 100 && <p className="mt-2 text-sm text-red-700">Lô vượt giới hạn 100 quy cách. Hãy thu hẹp nhóm trước khi tạo giá demo.</p>}
+        {demoPreview && <div className="mt-4 rounded-lg border border-amber-200 bg-white p-4"><p className="font-medium">Có {demoPreview.totalCount} quy cách thiếu giá; lô này tạo {demoPreview.count} quy cách · quy tắc {demoPreview.ruleVersion}</p>
           {demoPreview.count === 0 ? <p className="mt-2 text-sm text-gray-600">Hiện không có quy cách thiếu giá phù hợp để bổ sung.</p> : <><ul className="mt-3 max-h-56 space-y-2 overflow-auto text-sm">{demoPreview.items.slice(0, 20).map(item => <li key={item.variantId} className="flex flex-wrap justify-between gap-2"><span>Quy cách #{item.variantId} · gói {item.quantity} {item.unit}</span><span className="font-semibold">{formatVnd(item.amount)} · {item.method === "fallback_fixture" ? "mức fixture" : `tham khảo ${item.referencePriceIds.length} giá cùng nhóm`}</span></li>)}</ul>{demoPreview.count > 20 && <p className="mt-2 text-xs text-gray-500">Đang hiển thị 20 dòng đầu.</p>}</>}
-          <p className="mt-3 text-xs text-gray-600">Giá giả lập để trải nghiệm, chưa phải giá bán chính thức. Tiếp tục sẽ tạo toàn bộ {demoPreview.count} giá trong một giao dịch.</p>
-          <Button className="mt-3" disabled={!online || demoBusy || demoPreview.count === 0 || demoPreview.count > 100} onClick={() => void applyDemoPrices()}>Tạo {demoPreview.count} giá demo</Button>
+          <p className="mt-3 text-xs text-gray-600">Giá giả lập để trải nghiệm, chưa phải giá bán chính thức. Mỗi lần chỉ tạo tối đa 100 giá; xem trước lại để tiếp tục lô còn lại.</p>
+          {demoPreview.remainingCount > 0 && <p className="mt-2 text-sm text-amber-900">Sau lô này còn {demoPreview.remainingCount} quy cách; hãy xem trước lại để tạo lô tiếp theo.</p>}
+          <Button className="mt-3" disabled={!online || demoBusy || demoPreview.count === 0} onClick={() => void applyDemoPrices()}>Tạo {demoPreview.count} giá demo</Button>
         </div>}
       </Card>}
 

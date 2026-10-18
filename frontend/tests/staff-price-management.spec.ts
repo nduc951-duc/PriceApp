@@ -4,7 +4,7 @@ const user = { id: "staff-owner", aud: "authenticated", role: "authenticated", e
 const catalog = {
   syncedAt: "2026-10-17T10:00:00.000Z",
   entries: [{ categoryId: 3, productId: 8, variantId: 13, name: "Tắc kê đạn", category: "Tắc kê", spec: "6x50", displayName: "Đạn 6x50", productCode: "TK-650", aliases: ["tắc kê sắt"], sourcePages: [2], sourceFiles: [], verificationStatus: "verified" }],
-  prices: [{ id: 21, priceId: 21, categoryId: 3, productId: 8, variantId: 13, packagingId: 34, name: "Tắc kê đạn", category: "Tắc kê", variantDisplayName: "Đạn 6x50", spec: "6x50 · Bịch", variantSpec: "6x50", packageName: "Bịch", packageQuantity: 10, packageNote: "", priceType: "retail", minimumQuantity: 1, price: 15000, unit: "cái", supplier: "Sổ giá", sourcePages: [2], sourceFiles: [], status: "verified", version: 7, validFrom: "2026-10-01T00:00:00.000Z", validTo: null }],
+  prices: [{ id: 21, priceId: 21, categoryId: 3, productId: 8, variantId: 13, packagingId: 34, name: "Tắc kê đạn", category: "Tắc kê", variantDisplayName: "Đạn 6x50", spec: "6x50 · Bịch", variantSpec: "6x50", packageName: "Bịch", packageQuantity: 10, packageNote: "", priceType: "retail", minimumQuantity: 1, price: 15000, isDemo: false, purchasable: true, unit: "cái", supplier: "Sổ giá", sourcePages: [2], sourceFiles: [], status: "verified", version: 7, validFrom: "2026-10-01T00:00:00.000Z", validTo: null }],
 };
 
 async function signIn(page: Page) {
@@ -38,6 +38,41 @@ async function mockCatalogApi(page: Page, options: { role?: string; response?: t
 }
 
 test.describe("staff price management", () => {
+  test("owner previews, applies, and rolls back a bounded demo-price batch", async ({ page }) => {
+    const calls: Array<{ path: string; body?: unknown }> = [];
+    await mockCatalogApi(page, { role: "owner" });
+    await page.route("**/api/v1/admin/demo-prices/**", async route => {
+      const url = new URL(route.request().url());
+      const path = url.pathname;
+      if (path.endsWith("/preview")) return route.fulfill({ json: {
+        batchId: "a".repeat(32), snapshotHash: "a".repeat(32), ruleVersion: "demo-price-v1",
+        count: 1, totalCount: 241, remainingCount: 240,
+        items: [{ variantId: 91, productId: 8, packagingId: 31, quantity: 1, unit: "piece", amount: 50000, method: "fallback_fixture", referencePriceIds: [] }],
+      } });
+      if (path.endsWith("/apply")) {
+        calls.push({ path, body: route.request().postDataJSON() });
+        return route.fulfill({ json: { batchId: "b".repeat(32), created: 1, resumed: false } });
+      }
+      if (path.endsWith("/rollback")) {
+        calls.push({ path, body: route.request().postDataJSON() });
+        return route.fulfill({ json: { batchId: "b".repeat(32), deactivated: 1 } });
+      }
+      return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND", message: "Not found" }, requestId: "test" } });
+    });
+    await signIn(page);
+    await page.getByRole("button", { name: "Xem trước" }).click();
+    await expect(page.getByText(/Có 241 quy cách thiếu giá/)).toBeVisible();
+    await expect(page.getByText(/còn 240 quy cách/)).toBeVisible();
+    await page.getByRole("button", { name: "Tạo 1 giá demo" }).click();
+    await expect(page.getByRole("status").filter({ hasText: /Đã tạo 1 giá demo/ })).toBeVisible();
+    await page.getByRole("button", { name: "Hoàn tác lô gần nhất" }).click();
+    await expect(page.getByRole("status").filter({ hasText: /Đã ngừng hiệu lực 1 giá demo/ })).toBeVisible();
+    expect(calls).toEqual([
+      { path: expect.stringContaining("/apply"), body: { snapshotHash: "a".repeat(32) } },
+      { path: expect.stringContaining("/rollback"), body: { batchId: "b".repeat(32) } },
+    ]);
+  });
+
   test("finds an item by alias and saves the selected price with its current version", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
     const api = await mockCatalogApi(page);

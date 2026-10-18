@@ -1,16 +1,34 @@
 import { expect, test } from "@playwright/test";
 
 const price = {
-  id: 149, packagingId: 1, version: 1, amount: 80000, priceType: "retail",
+  id: 149, packagingId: 1, version: 1, amount: 80000, isDemo: false, purchasable: true, priceType: "retail",
   minimumQuantity: 1, packagingName: "1 bánh/cái", packageQuantity: 1, unit: "bánh",
   packageNote: "", priceList: "Sổ giá viết tay", supplier: "Nhập từ Trang 1-13", verificationStatus: "verified",
 };
+
+test("RAG labels a simulated price and offers no order action", async ({ page }) => {
+  const demoPrice = { ...price, isDemo: true, purchasable: false };
+  await page.route("**/api/v1/public/catalog", route => route.fulfill({ json: { items: [], syncedAt: new Date().toISOString() } }));
+  await page.route("**/api/v1/public/rag/query", route => route.fulfill({ json: {
+    status: "answered",
+    answer: "Giá demo: 50.000 ₫ — giá giả lập, chưa phải giá bán chính thức. Nguồn: Giá giả lập.",
+    items: [{ id: 686, productName: "Demo product", category: "Test", variant: "M6", verificationStatus: "verified", sourcePages: [1], prices: [demoPrice] }],
+    sources: [], retrieval: { vectorChunks: 0, lexicalProducts: 1, embeddingModel: "bge-m3" },
+  } }));
+  await page.goto("/shop");
+  await page.getByLabel("Câu hỏi cho trợ lý AI").fill("Giá demo product M6?");
+  await page.getByRole("button", { name: "Gửi câu hỏi" }).click();
+  await expect(page.getByRole("heading", { name: "Demo product · M6" })).toBeVisible();
+  await expect(page.getByText("Giá demo", { exact: true })).toBeVisible();
+  await expect(page.getByText("Giá giả lập, chưa phải giá bán chính thức.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Thêm vào đơn/ })).toHaveCount(0);
+});
 
 test("a guest can ask RAG for a price, see its source, and add the chosen price to the order", async ({ page }) => {
   const publicCatalog = [{
     category: "Bánh xe", name: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T", specification: "Đỏ mận khóa ĐL 1T",
     packaging: "1 bánh/cái", packageQuantity: 1, unit: "bánh", priceId: price.id, version: price.version,
-    priceType: "retail", minimumQuantity: 1, price: price.amount,
+    priceType: "retail", minimumQuantity: 1, price: price.amount, isDemo: false, purchasable: true,
   }];
   await page.route("**/api/v1/public/catalog", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: publicCatalog, syncedAt: new Date().toISOString() }) }));
   await page.route("**/api/v1/public/rag/query", async (route) => {
@@ -95,8 +113,8 @@ test("Alt+Enter inserts a line break and Enter sends the customer question", asy
 
 test("customer catalog search is accent-insensitive and independent from AI answers", async ({ page }) => {
   await page.route("**/api/v1/public/catalog", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [
-    { category: "Bánh xe", name: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T", specification: "Đỏ mận khóa ĐL 1T", productCode: "BX-1T", aliases: ["Bánh xe đỏ mận"], packaging: "1 bánh/cái", packageQuantity: 1, unit: "bánh", priceId: 149, version: 1, priceType: "retail", minimumQuantity: 1, price: 80000 },
-    { category: "Tắc kê", name: "Tắc kê sắt", variant: "6x50", specification: "6x50", productCode: "TK-650", aliases: ["Tắc kê đạn"], packaging: "Bịch 10 cái", packageQuantity: 10, unit: "cái", priceId: 150, version: 1, priceType: "retail", minimumQuantity: 1, price: 40000 },
+    { category: "Bánh xe", name: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T", specification: "Đỏ mận khóa ĐL 1T", productCode: "BX-1T", aliases: ["Bánh xe đỏ mận"], packaging: "1 bánh/cái", packageQuantity: 1, unit: "bánh", priceId: 149, version: 1, priceType: "retail", minimumQuantity: 1, price: 80000, isDemo: false, purchasable: true},
+    { category: "Tắc kê", name: "Tắc kê sắt", variant: "6x50", specification: "6x50", productCode: "TK-650", aliases: ["Tắc kê đạn"], packaging: "Bịch 10 cái", packageQuantity: 10, unit: "cái", priceId: 150, version: 1, priceType: "retail", minimumQuantity: 1, price: 40000, isDemo: false, purchasable: true},
   ], syncedAt: new Date().toISOString() }) }));
   let answerCount = 0;
   await page.route("**/api/v1/public/rag/query", async (route) => {
@@ -151,7 +169,7 @@ test("a guest follow-up carries the last question and IDs from the prior result"
     requests.push(body);
     const response = body.question === "Bánh xe giá bao nhiêu?"
       ? { status: "clarify", answer: "Bạn cần loại bánh xe nào?", items: [], sources: [], retrieval: { vectorChunks: 2, lexicalProducts: 2, embeddingModel: "bge-m3" } }
-      : { status: "answered", answer: "Bánh xe — Đỏ mận ĐL 1T2: Giá lẻ 82.000 ₫ / bánh. Nguồn: trang 11.", items: [{ id: 687, productName: "Bánh xe", category: "Bánh xe", variant: "Đỏ mận ĐL 1T2", verificationStatus: "verified", sourcePages: [11], prices: [{ ...price, id: 152, amount: 82000, packagingName: "bánh" }] }], sources: [{ pageNumber: 11, chunkId: 2, chunkKey: "page:11:variant:687:0", sourceRevision: null, sourceSpan: null, excerpt: "Bánh xe Đỏ mận ĐL 1T2", evidenceKind: "verified_catalog", verifiedVariantId: 687 }], retrieval: { vectorChunks: 1, lexicalProducts: 1, embeddingModel: "bge-m3" } };
+      : { status: "answered", answer: "Bánh xe — Đỏ mận ĐL 1T2: Giá lẻ 82.000 ₫ / bánh. Nguồn: trang 11.", items: [{ id: 687, productName: "Bánh xe", category: "Bánh xe", variant: "Đỏ mận ĐL 1T2", verificationStatus: "verified", sourcePages: [11], prices: [{ ...price, id: 152, amount: 82000, isDemo: false, purchasable: true, packagingName: "bánh" }] }], sources: [{ pageNumber: 11, chunkId: 2, chunkKey: "page:11:variant:687:0", sourceRevision: null, sourceSpan: null, excerpt: "Bánh xe Đỏ mận ĐL 1T2", evidenceKind: "verified_catalog", verifiedVariantId: 687 }], retrieval: { vectorChunks: 1, lexicalProducts: 1, embeddingModel: "bge-m3" } };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) });
   });
 
@@ -178,7 +196,7 @@ test("customer sees a validated comparison block and its cited source", async ({
   await page.route("**/api/v1/public/rag/query", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
     status: "answered", answer: "The documented options differ.", publicFeedbackHandle: "response-handle",
     answerBlocks: [{ kind: "comparison", text: "The source describes different material details for each option.", variantIds: [687, 688], evidenceIds: ["variant:687", "variant:688", "chunk:11", "chunk:12"] }],
-    items: [{ id: 687, productName: "Bánh xe", category: "Bánh xe", variant: "Đỏ mận ĐL 1T2", verificationStatus: "verified", sourcePages: [11], prices: [{ ...price, id: 152, amount: 82000 }] }],
+    items: [{ id: 687, productName: "Bánh xe", category: "Bánh xe", variant: "Đỏ mận ĐL 1T2", verificationStatus: "verified", sourcePages: [11], prices: [{ ...price, id: 152, amount: 82000}] }],
     sources: [{ pageNumber: 11, chunkId: 11, chunkKey: "page:11:variant:687:0", sourceRevision: 1, sourceSpan: { start: 0, end: 20 }, excerpt: "Verified material detail", evidenceKind: "verified_catalog", verifiedVariantId: 687 }],
     retrieval: { vectorChunks: 2, lexicalProducts: 2, embeddingModel: "bge-m3" },
   }) }));
@@ -246,13 +264,13 @@ test("clarification never lets a customer add a candidate or displays its price 
 
 for (const change of ["changed", "removed", "unavailable"] as const) {
   test(`RAG add revalidates the current SQL catalog when the selected price is ${change}`, async ({ page }) => {
-    const catalogPrice = { category: "Bánh xe", name: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T", specification: "Đỏ mận khóa ĐL 1T", packaging: "1 bánh/cái", packageQuantity: 1, unit: "bánh", priceId: price.id, version: price.version, priceType: "retail", minimumQuantity: 1, price: price.amount };
+    const catalogPrice = { category: "Bánh xe", name: "Bánh xe", variant: "Đỏ mận khóa ĐL 1T", specification: "Đỏ mận khóa ĐL 1T", packaging: "1 bánh/cái", packageQuantity: 1, unit: "bánh", priceId: price.id, version: price.version, priceType: "retail", minimumQuantity: 1, price: price.amount , isDemo: false, purchasable: true};
     let revalidating = false;
     let revalidationReads = 0;
     await page.route("**/api/v1/public/catalog", route => {
       if (revalidating) revalidationReads++;
       if (revalidating && change === "unavailable") return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "UNAVAILABLE", message: "Unavailable" }, requestId: "revalidation" }) });
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: !revalidating ? [catalogPrice] : change === "removed" ? [] : [{ ...catalogPrice, version: 2, price: 85000 }], syncedAt: new Date().toISOString() }) });
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: !revalidating ? [catalogPrice] : change === "removed" ? [] : [{ ...catalogPrice, version: 2, price: 85000}], syncedAt: new Date().toISOString() }) });
     });
     await page.route("**/api/v1/public/rag/query", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
       status: "answered", answer: "Giá hiện hành trong bảng bên dưới.",
@@ -285,7 +303,7 @@ test("customer variant listing shows every specification and only priced variant
     status: "answered",
     answer: "Tắc kê đạn có 2 quy cách đã xác minh: 6x50 34.000 ₫; 8x60 chưa có giá hiện hành.",
     items: [
-      { id: 1, productName: "Tắc kê đạn", category: "Tắc kê", variant: "6x50", verificationStatus: "verified", sourcePages: [2], prices: [{ ...price, id: 301, amount: 34000, packagingName: "Bịch 10 cái", packageQuantity: 10, unit: "cái" }] },
+      { id: 1, productName: "Tắc kê đạn", category: "Tắc kê", variant: "6x50", verificationStatus: "verified", sourcePages: [2], prices: [{ ...price, id: 301, amount: 34000, isDemo: false, purchasable: true, packagingName: "Bịch 10 cái", packageQuantity: 10, unit: "cái" }] },
       { id: 2, productName: "Tắc kê đạn", category: "Tắc kê", variant: "8x60", verificationStatus: "verified", sourcePages: [3], prices: [] },
     ],
     sources: [], retrieval: { vectorChunks: 1, lexicalProducts: 1, embeddingModel: "bge-m3" },

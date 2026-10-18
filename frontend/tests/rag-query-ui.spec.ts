@@ -25,7 +25,7 @@ const answer = {
       id: 2,
       packagingId: 10,
       version: 1,
-      amount: 34000,
+      amount: 34000, isDemo: false, purchasable: true,
       priceType: "retail",
       packagingName: "10 bộ/bịch",
       packageQuantity: 10,
@@ -129,7 +129,7 @@ test("staff variant listing shows all specifications and only priced variants ca
     if (pathname.endsWith("/rag/query") && request.method() === "POST") return fulfill(route, 200, {
       status: "answered", answer: "Tắc kê đạn có 2 quy cách đã xác minh.",
       items: [
-        { id: 1, productName: "Tắc kê đạn", category: "Tắc kê", variant: "6x50", verificationStatus: "verified", sourcePages: [2], prices: [{ id: 301, packagingId: 31, version: 2, amount: 34000, priceType: "retail", minimumQuantity: 1, packagingName: "Bịch 10 cái", packageQuantity: 10, unit: "cái", packageNote: "", priceList: "Sổ hiện hành", supplier: "Cửa hàng", verificationStatus: "verified" }] },
+        { id: 1, productName: "Tắc kê đạn", category: "Tắc kê", variant: "6x50", verificationStatus: "verified", sourcePages: [2], prices: [{ id: 301, packagingId: 31, version: 2, amount: 34000, isDemo: false, purchasable: true, priceType: "retail", minimumQuantity: 1, packagingName: "Bịch 10 cái", packageQuantity: 10, unit: "cái", packageNote: "", priceList: "Sổ hiện hành", supplier: "Cửa hàng", verificationStatus: "verified" }] },
         { id: 2, productName: "Tắc kê đạn", category: "Tắc kê", variant: "8x60", verificationStatus: "verified", sourcePages: [3], prices: [] },
       ],
       sources: [], retrieval: { vectorChunks: 1, lexicalProducts: 1, embeddingModel: "bge-m3" }, conversationId: "variant-listing-conversation", feedbackMessageId: "variant-listing-message",

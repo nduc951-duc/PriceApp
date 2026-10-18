@@ -35,7 +35,7 @@ test("shop layout keeps real units readable and the cart usable on narrow screen
   const items = Array.from({ length: 12 }, (_, index) => ({
     category: index < 6 ? "Vít & bu lông" : "Phụ kiện", name: index % 2 ? "Bu lông lục giác mạ kẽm" : "Vít tự khoan đầu dù",
     variant: `Quy cách ${index + 1} · 4 × 20 mm`, specification: "Thép mạ kẽm", packaging: "Gói 100 cái", packageQuantity: 100,
-    unit: "cái", priceId: index + 1, version: 1, priceType: "retail", minimumQuantity: 1, price: 15000 + index * 1000,
+    unit: "cái", priceId: index + 1, version: 1, priceType: "retail", minimumQuantity: 1, price: 15000 + index * 1000, isDemo: false, purchasable: true,
   }));
   await page.route("**/api/v1/public/catalog", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items, syncedAt: new Date().toISOString() }) }));
   await page.goto("/");

@@ -15,13 +15,19 @@ describe("customer order repository", () => {
   it("returns only safe retail and wholesale rows from the public catalog RPC", () => {
     const result = mapPublicCatalogRows([row("retail"), row("wholesale"), row("dealer"), row("retail", { supplier: "private" })]);
     expect(result).toEqual([
-      { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", productCode: null, aliases: [], packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "retail", minimumQuantity: 1, price: 15000 },
-      { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", productCode: null, aliases: [], packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "wholesale", minimumQuantity: 1, price: 15000 },
-      { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", productCode: null, aliases: [], packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "retail", minimumQuantity: 1, price: 15000 },
+      { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", productCode: null, aliases: [], packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "retail", minimumQuantity: 1, price: 15000, isDemo: false, purchasable: true },
+      { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", productCode: null, aliases: [], packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "wholesale", minimumQuantity: 1, price: 15000, isDemo: false, purchasable: true },
+      { category: "Vít", name: "Vít tự khoan", variant: "Đầu dù 4x20", specification: "4 x 20 mm", productCode: null, aliases: [], packaging: "Gói 100 cái", packageQuantity: 100, unit: "cái", priceId: 21, version: 3, priceType: "retail", minimumQuantity: 1, price: 15000, isDemo: false, purchasable: true },
     ]);
     expect(JSON.stringify(result)).not.toContain("supplier");
   });
 
+  it("labels demo rows as non-purchasable and prefers real rows for the same variant", () => {
+    expect(mapPublicCatalogRows([row("retail", { is_demo: true, price_id: 22 })]))
+      .toMatchObject([{ priceId: 22, isDemo: true, purchasable: false }]);
+    expect(mapPublicCatalogRows([row("retail"), row("retail", { is_demo: true, price_id: 22 })]))
+      .toMatchObject([{ priceId: 21, isDemo: false, purchasable: true }]);
+  });
   it("maps public SKU and aliases for direct catalog search", () => {
     const [mapped] = mapPublicCatalogRows([row("retail", { product_code: "TK-650", aliases: ["Tắc kê đạn"] })]);
     expect(mapped).toMatchObject({ productCode: "TK-650", aliases: ["Tắc kê đạn"] });

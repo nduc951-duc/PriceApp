@@ -24,7 +24,8 @@ export function priceAnswer(items: Item[]): string {
       return `${price.isDemo ? "Giá demo" : tier}: ${formatVnd(price.amount)} / ${price.packagingName}${contents}${threshold ? ` (${threshold})` : ""}${price.isDemo ? " — giá giả lập, chưa phải giá bán chính thức" : ""}`;
     });
     const priceSources = [...new Set(item.prices.map((price) => price.isDemo ? "Giá giả lập" : [price.priceList, price.supplier].filter(Boolean).join(" · ")).filter(Boolean))];
-    const source = [...priceSources, item.sourcePages.length ? `trang ${item.sourcePages.join(", ")}` : "chưa có trang nguồn"];
+    const hasDemoPrice = item.prices.some((price) => price.isDemo);
+    const source = hasDemoPrice ? priceSources : [...priceSources, item.sourcePages.length ? `trang ${item.sourcePages.join(", ")}` : "chưa có trang nguồn"];
     return `${item.productName} — ${item.variant}: ${prices.join("; ")}.${meaning ? ` Diễn giải quy cách: ${meaning}.` : ""} Nguồn: ${source.join(" · ")}.`;
   }).join("\n");
 }
