@@ -1,6 +1,6 @@
 ﻿# Demo Price Backfill Implementation Plan
 
-> Status: Complete in the current workspace. This plan records the implemented owner-only in-app workflow; no CLI was added.
+> Status: Complete. The owner-only in-app workflow is implemented, tested, and its migrations are applied to the linked Supabase project App Price. No CLI was added for price creation.
 
 **Goal:** Fill eligible variants that have no current real price with visibly labeled demo prices that cannot be used for orders.
 
@@ -13,6 +13,8 @@
 - Added UI controls on `/staff/prices`, explicit demo labels in storefront/RAG/staff views, and guards preventing demo prices from entering customer or staff order flows.
 - Added unit, API/repository, SQL regression, and Playwright coverage. Added `docs/DEMO_PRICE_BACKFILL.md` with the test-database runbook.
 - Generated and checked OpenAPI artifacts.
+- Applied the required remote migrations to App Price. This also applied the two earlier pending migrations identified by CLI dry-run; `202610180012` removed 13 rows from the retired OCR table before dropping it.
+- Verified that all four migration records and the demo RPCs exist remotely. No demo-price rows have been created.
 
 ## Safety and behavior
 
@@ -21,8 +23,8 @@
 - Never change a real price to manufacture a demo amount. A later valid real price hides the demo price.
 - Label demo amounts as simulated in all customer-facing displays and RAG responses. Never offer an order action for them; server-side order validation also rejects demo prices.
 - Restrict mutation RPCs to owners, write audit history, recheck the snapshot before apply, cap each batch at 100 rows, and refuse rollback if a price changed or was used.
-- Run migrations and SQL tests only against a dedicated test database. No production migration or demo-price apply was performed during this task.
+- Migration deployment adds schema and read behavior; actual demo prices are created only after an owner reviews and applies a preview batch.
 
 ## Verification
 
-See `docs/reports/2026-10-19-demo-price-backfill-validation.md` for commands and outcomes. The focused demo-price E2E suite passed on desktop and mobile. The full legacy E2E suite still has unrelated POS/layout failures documented in the report.
+See `docs/reports/2026-10-19-demo-price-backfill-validation.md` for test results and remote deployment details. The focused demo-price E2E suite passed on desktop and mobile; the full legacy E2E suite still has unrelated POS/layout failures documented in the report.
