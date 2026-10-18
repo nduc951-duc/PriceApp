@@ -11,6 +11,8 @@ export const priceUpdateSchema = z.object({
 }).strict();
 export const priceIdParamsSchema = z.object({ priceId: z.coerce.number().int().positive() });
 export const priceUndoSchema = z.object({ historyId: positiveId, expectedVersion: z.number().int().positive() }).strict();
+export const demoPriceApplySchema = z.object({ snapshotHash: z.string().regex(/^[0-9a-f]{32}$/) }).strict();
+export const demoPriceRollbackSchema = z.object({ batchId: z.string().regex(/^[0-9a-f]{32}$/) }).strict();
 export const catalogUpdateSchema = z.object({
   categoryId: positiveId,
   categoryName: z.string().trim().min(1).max(200),

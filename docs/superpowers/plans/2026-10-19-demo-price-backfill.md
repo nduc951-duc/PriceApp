@@ -11,6 +11,7 @@
 **Spec:** `docs/superpowers/specs/2026-10-19-demo-price-backfill-design.md`
 
 **Status:** Bản kế hoạch đề xuất theo lựa chọn hiển thị ngay trong app. Chưa triển khai, chưa kiểm kê database và chưa nhập giá. Việc viết kế hoạch không cho phép chạy apply trong lượt này.
+> Implementation update (2026-10-19): The feature is implemented in the current workspace through owner-only preview/apply/rollback controls on `/staff/prices` (the shipped interface replaces the planned CLI). Backend and frontend typechecks pass. No automated tests were run and no Supabase migration or demo rows have been applied; use a test database for the test steps.
 
 ## Global Constraints
 

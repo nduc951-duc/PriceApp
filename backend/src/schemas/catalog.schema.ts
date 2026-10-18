@@ -9,6 +9,7 @@ export type CatalogPrice = {
   packagingId: number; name: string; category: string; variantDisplayName: string;
   spec: string; variantSpec: string; packageName: string; packageQuantity: number;
   packageNote: string; priceType: string; minimumQuantity: number; price: number;
+  isDemo: boolean; purchasable: boolean;
   unit: string; supplier: string; sourcePages: number[]; sourceFiles: string[]; validFrom: string; validTo: string | null;
   status: "verified" | "needs_review" | "unreadable"; version: number;
 };

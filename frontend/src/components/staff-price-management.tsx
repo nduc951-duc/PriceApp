@@ -11,9 +11,11 @@ import { cacheSnapshot, readSnapshot } from "@/features/offline/cache";
 import { ApiRequestError, requestApi } from "@/lib/api/client";
 import { fetchCatalog, type CatalogEntry, type CatalogPrice } from "@/lib/api/catalog";
 import { updatePrice } from "@/lib/api/prices";
+import { DemoPriceLabel } from "@/components/demo-price-label";
 
 type StaffRole = "owner" | "editor" | "viewer";
 type CatalogSnapshot = { entries: CatalogEntry[]; prices: CatalogPrice[]; syncedAt: string };
+type DemoPricePreview = { batchId: string; snapshotHash: string; ruleVersion: string; count: number; items: Array<{ variantId: number; productId: number; packagingId: number; quantity: number; unit: string; amount: number; method: "same_package_median" | "fallback_fixture"; referencePriceIds: number[] }> };
 
 function verificationLabel(status: CatalogEntry["verificationStatus"] | CatalogPrice["status"]) {
   return status === "verified" ? "Đã xác minh" : status === "unreadable" ? "Khó đọc" : "Cần đối chiếu";
@@ -45,6 +47,11 @@ export function StaffPriceManagement() {
   const [saveError, setSaveError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const [online, setOnline] = useState(true);
+  const [demoPreview, setDemoPreview] = useState<DemoPricePreview | null>(null);
+  const [demoBatchId, setDemoBatchId] = useState("");
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoError, setDemoError] = useState("");
+  const [demoMessage, setDemoMessage] = useState("");
 
   const load = useCallback(async () => {
     setLoadError("");
@@ -146,6 +153,47 @@ export function StaffPriceManagement() {
     }
   }
 
+  async function previewDemoPrices() {
+    if (role !== "owner" || !online || demoBusy) return;
+    setDemoBusy(true); setDemoError(""); setDemoMessage("");
+    try {
+      const preview = await requestApi<DemoPricePreview>("/api/v1/admin/demo-prices/preview");
+      setDemoPreview(preview);
+    } catch {
+      setDemoError("Không tạo được bản xem trước giá demo. Kiểm tra migration và quyền chủ cửa hàng.");
+    } finally { setDemoBusy(false); }
+  }
+
+  async function applyDemoPrices() {
+    if (!demoPreview || role !== "owner" || !online || demoBusy) return;
+    setDemoBusy(true); setDemoError(""); setDemoMessage("");
+    try {
+      const result = await requestApi<{ batchId: string; created: number; resumed: boolean }>("/api/v1/admin/demo-prices/apply", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ snapshotHash: demoPreview.snapshotHash }),
+      });
+      setDemoBatchId(result.batchId); setDemoPreview(null);
+      setDemoMessage(`Đã tạo ${result.created} giá demo${result.resumed ? " (lô đã nhập trước đó)" : ""}. Giá demo không dùng cho đặt hàng.`);
+      await load();
+    } catch (error) {
+      setDemoError(error instanceof ApiRequestError && error.status === 409
+        ? "Danh mục đã đổi sau bản xem trước. Hãy tạo lại bản xem trước."
+        : "Không áp dụng được lô giá demo. Hãy tạo bản xem trước mới rồi thử lại.");
+    } finally { setDemoBusy(false); }
+  }
+
+  async function rollbackDemoPrices() {
+    if (!demoBatchId || role !== "owner" || !online || demoBusy) return;
+    setDemoBusy(true); setDemoError(""); setDemoMessage("");
+    try {
+      const result = await requestApi<{ batchId: string; deactivated: number }>("/api/v1/admin/demo-prices/rollback", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ batchId: demoBatchId }),
+      });
+      setDemoBatchId(""); setDemoMessage(`Đã ngừng hiệu lực ${result.deactivated} giá demo.`); await load();
+    } catch {
+      setDemoError("Không hoàn tác được an toàn; lô giá có thể đã được sửa hoặc đã phát sinh đơn hàng.");
+    } finally { setDemoBusy(false); }
+  }
+
   return <main className="min-h-screen bg-gray-50 text-gray-900">
     <header className="app-blue-navbar border-b border-gray-200 bg-white">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-6">
@@ -163,6 +211,19 @@ export function StaffPriceManagement() {
       {loadError && <Alert color={stale ? "warning" : "failure"} className="mb-4"><div className="flex items-start gap-2"><WifiOff size={17} className="mt-0.5 shrink-0"/><span>{loadError}{stale && syncedAt && <span className="mt-1 block text-xs">Bản lưu lúc {new Date(syncedAt).toLocaleString("vi-VN")} · Không thể sửa giá khi dữ liệu chưa đồng bộ.</span>}</span></div></Alert>}
       {saveError && <Alert color="failure" className="mb-4" role="alert">{saveError}</Alert>}
       {saveMessage && <Alert color="success" className="mb-4" role="status">{saveMessage}</Alert>}
+      {demoError && <Alert color="failure" className="mb-4" role="alert">{demoError}</Alert>}
+      {demoMessage && <Alert color="success" className="mb-4" role="status">{demoMessage}</Alert>}
+      {role === "owner" && <Card className="mb-5 border-amber-300 bg-amber-50 shadow-none">
+        <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold text-amber-950">Giá demo cho mặt hàng chưa có giá</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-amber-900">Chỉ tạo giá giả lập cho quy cách đã xác minh, đang hoạt động, có bao bì và chưa có giá thật hiện hành. Nhãn demo sẽ xuất hiện ở catalog và chatbot; giá này không dùng để đặt hàng.</p></div>
+          <div className="flex flex-wrap gap-2"><Button color="light" disabled={!online || demoBusy} onClick={() => void previewDemoPrices()}>{demoBusy ? "Đang xử lý…" : "Xem trước"}</Button>{demoBatchId && <Button color="light" disabled={!online || demoBusy} onClick={() => void rollbackDemoPrices()}>Hoàn tác lô gần nhất</Button>}</div>
+        </div>
+        {demoPreview && <div className="mt-4 rounded-lg border border-amber-200 bg-white p-4"><p className="font-medium">Có {demoPreview.count} quy cách đủ điều kiện · quy tắc {demoPreview.ruleVersion}</p>
+          {demoPreview.count > 100 && <p className="mt-2 text-sm text-red-700">Lô vượt giới hạn 100 quy cách. Hãy thu hẹp nhóm trước khi tạo giá demo.</p>}
+          {demoPreview.count === 0 ? <p className="mt-2 text-sm text-gray-600">Hiện không có quy cách thiếu giá phù hợp để bổ sung.</p> : <><ul className="mt-3 max-h-56 space-y-2 overflow-auto text-sm">{demoPreview.items.slice(0, 20).map(item => <li key={item.variantId} className="flex flex-wrap justify-between gap-2"><span>Quy cách #{item.variantId} · gói {item.quantity} {item.unit}</span><span className="font-semibold">{formatVnd(item.amount)} · {item.method === "fallback_fixture" ? "mức fixture" : `tham khảo ${item.referencePriceIds.length} giá cùng nhóm`}</span></li>)}</ul>{demoPreview.count > 20 && <p className="mt-2 text-xs text-gray-500">Đang hiển thị 20 dòng đầu.</p>}</>}
+          <p className="mt-3 text-xs text-gray-600">Giá giả lập để trải nghiệm, chưa phải giá bán chính thức. Tiếp tục sẽ tạo toàn bộ {demoPreview.count} giá trong một giao dịch.</p>
+          <Button className="mt-3" disabled={!online || demoBusy || demoPreview.count === 0 || demoPreview.count > 100} onClick={() => void applyDemoPrices()}>Tạo {demoPreview.count} giá demo</Button>
+        </div>}
+      </Card>}
 
       {loading && !catalog ? <div role="status" className="rounded-lg border border-gray-200 bg-white p-8 text-sm text-gray-600"><Spinner size="sm" className="mr-2"/>Đang tải danh mục và mức giá…</div>
         : !catalog ? <Card className="border-gray-200 shadow-none"><h2 className="font-semibold">Chưa có dữ liệu để hiển thị</h2><p className="text-sm text-gray-600">Kết nối máy chủ rồi tải lại danh mục.</p><Button className="w-fit" onClick={() => void load()}>Thử lại</Button></Card>
@@ -185,12 +246,12 @@ export function StaffPriceManagement() {
                   const contents = formatPackageContents(price.packageQuantity, price.unit);
                   const minimum = price.minimumQuantity > 1 ? formatMinimumPackageQuantity(price.minimumQuantity, price.packageName, price.packageQuantity, price.unit) : null;
                   return <article key={price.priceId} className="rounded-md border border-gray-200 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-medium text-gray-600">{priceTypeLabel(price.priceType)}</p><h3 className="mt-1 break-words text-base font-semibold">{price.packageName}</h3><p className="mt-1 text-sm text-gray-600">{contents ? `Chứa ${contents}` : "Số lượng trong bao bì chưa rõ"}{minimum ? ` · ${minimum}` : ""}</p></div><Badge color={price.status === "verified" ? "success" : price.status === "unreadable" ? "failure" : "warning"}>{verificationLabel(price.status)}</Badge></div>
+                    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="flex items-center gap-2 text-sm font-medium text-gray-600">{price.isDemo ? <DemoPriceLabel/> : priceTypeLabel(price.priceType)}</p><h3 className="mt-1 break-words text-base font-semibold">{price.packageName}</h3><p className="mt-1 text-sm text-gray-600">{contents ? `Chứa ${contents}` : "Số lượng trong bao bì chưa rõ"}{minimum ? ` · ${minimum}` : ""}</p>{price.isDemo && <p className="mt-1 text-sm text-amber-800">Giá giả lập, chưa phải giá bán chính thức.</p>}</div><Badge color={price.status === "verified" ? "success" : price.status === "unreadable" ? "failure" : "warning"}>{verificationLabel(price.status)}</Badge></div>
                     <p className="mt-3 text-2xl font-semibold tabular-nums">{formatVnd(price.price)} <span className="text-sm font-normal text-gray-500">/ {price.packageName || "đơn vị bán chưa xác định"}</span></p>
                     <p className="mt-1 text-xs text-gray-500">Hiệu lực: {formatDate(price.validFrom)} – {formatDate(price.validTo)} · Nhà cung cấp: {price.supplier}</p>
                     <p className="mt-1 text-xs text-gray-500">Phiên bản {price.version}{price.sourcePages.length ? ` · Nguồn: trang ${price.sourcePages.join(", ")}` : " · Chưa gắn trang nguồn"}</p>
                     {editingPriceId === price.priceId ? <div className="mt-4 rounded-md bg-gray-50 p-3"><Label htmlFor={`price-amount-${price.priceId}`}>Giá mới VND</Label><TextInput id={`price-amount-${price.priceId}`} className="mt-1" inputMode="decimal" value={amountDraft} onChange={event => setAmountDraft(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void savePrice(price); } if (event.key === "Escape") setEditingPriceId(null); }}/><p className="mt-2 text-xs text-gray-500">Giá hiện tại {formatVnd(price.price)} · sẽ lưu với phiên bản {price.version}</p><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" disabled={saving || !canEditPrice} onClick={() => void savePrice(price)}><Save size={14} className="mr-1"/>{saving ? "Đang lưu…" : "Lưu giá"}</Button><Button size="sm" color="light" disabled={saving} onClick={() => { setEditingPriceId(null); setSaveError(""); }}><X size={14} className="mr-1"/>Hủy</Button></div></div>
-                      : <div className="mt-3">{canEditPrice ? <Button size="sm" color="light" onClick={() => { setEditingPriceId(price.priceId); setAmountDraft(String(price.price)); setSaveError(""); setSaveMessage(""); }}><Save size={14} className="mr-1"/>Sửa {priceTypeLabel(price.priceType).toLowerCase()}</Button> : <p className="text-xs text-gray-500">{stale || !online ? "Chỉ xem khi dữ liệu chưa đồng bộ hoặc đang ngoại tuyến." : role === "viewer" ? "Tài khoản chỉ có quyền xem." : "Chưa xác minh được quyền sửa."}</p>}</div>}
+                      : <div className="mt-3">{canEditPrice && !price.isDemo ? <Button size="sm" color="light" onClick={() => { setEditingPriceId(price.priceId); setAmountDraft(String(price.price)); setSaveError(""); setSaveMessage(""); }}><Save size={14} className="mr-1"/>Sửa {priceTypeLabel(price.priceType).toLowerCase()}</Button> : <p className="text-xs text-gray-500">{price.isDemo ? "Giá demo chỉ để thử nghiệm; nhập giá bán chính thức qua cập nhật catalog." : stale || !online ? "Chỉ xem khi dữ liệu chưa đồng bộ hoặc đang ngoại tuyến." : role === "viewer" ? "Tài khoản chỉ có quyền xem." : "Chưa xác minh được quyền sửa."}</p>}</div>}
                   </article>;
                 })}</div>}
               <div className="flex items-center gap-2 border-t border-gray-200 pt-3 text-xs text-gray-500"><Check size={14}/>Giá hiển thị lấy nguyên từ SQL; không quy đổi hoặc tính lại.</div>

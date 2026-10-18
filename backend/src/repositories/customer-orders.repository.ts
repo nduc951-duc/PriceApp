@@ -7,7 +7,7 @@ export type PublicCatalogItem = {
   category: string; name: string; variant: string; specification: string; packaging: string;
   productCode: string | null; aliases: string[];
   packageQuantity: number; unit: string; priceId: number; version: number;
-  priceType: PublicPriceType; minimumQuantity: number; price: number;
+  priceType: PublicPriceType; minimumQuantity: number; price: number; isDemo: boolean; purchasable: boolean;
 };
 export type CustomerOrderInput = {
   customerName: string; phone: string; idempotencyKey: string; deliveryAddress?: string; deliveryNotes?: string;
@@ -30,18 +30,22 @@ type PublicCatalogRow = {
   category: string; product_name: string; variant_name: string; specification: string;
   product_code?: string | null; aliases?: string[] | null;
   packaging_name: string; package_quantity: string | number; unit: string; price_id: number;
-  price_version: number; price_type: string; minimum_quantity: string | number; amount: string | number;
+  price_version: number; price_type: string; minimum_quantity: string | number; amount: string | number; is_demo?: boolean;
 };
 
 export function mapPublicCatalogRows(rows: PublicCatalogRow[]): PublicCatalogItem[] {
+  const realVariantKeys = new Set(rows.filter(row => row.is_demo !== true).map(row =>
+    JSON.stringify([row.category, row.product_name, row.variant_name, row.specification])));
   return rows.flatMap(row => {
+    if (row.is_demo === true && realVariantKeys.has(JSON.stringify([row.category, row.product_name, row.variant_name, row.specification]))) return [];
     if (row.price_type !== "retail" && row.price_type !== "wholesale") return [];
     const numbers = [Number(row.package_quantity), Number(row.minimum_quantity), Number(row.amount)];
     if (!numbers.every(Number.isFinite) || numbers[0] <= 0 || numbers[1] <= 0 || numbers[2] < 0 || !Number.isSafeInteger(row.price_id) || !Number.isSafeInteger(row.price_version)) return [];
     return [{ category: row.category, name: row.product_name, variant: row.variant_name, specification: row.specification,
       productCode: row.product_code ?? null, aliases: row.aliases ?? [],
       packaging: row.packaging_name, packageQuantity: numbers[0], unit: row.unit, priceId: row.price_id,
-      version: row.price_version, priceType: row.price_type, minimumQuantity: numbers[1], price: numbers[2] }];
+      version: row.price_version, priceType: row.price_type, minimumQuantity: numbers[1], price: numbers[2],
+      isDemo: row.is_demo === true, purchasable: row.is_demo !== true }];
   });
 }
 

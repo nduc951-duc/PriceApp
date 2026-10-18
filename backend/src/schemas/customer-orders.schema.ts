@@ -6,6 +6,7 @@ export const publicCatalogResponseSchema = z.object({
     productCode: z.string().nullable(), aliases: z.array(z.string()), packaging: z.string(),
     packageQuantity: z.number().positive(), unit: z.string(), priceId: z.number().int().positive(), version: z.number().int().positive(),
     priceType: z.enum(["retail", "wholesale"]), minimumQuantity: z.number().positive(), price: z.number().nonnegative(),
+    isDemo: z.boolean(), purchasable: z.boolean(),
   })), syncedAt: z.string(),
 });
 

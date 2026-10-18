@@ -5,6 +5,7 @@ const formatVnd = (amount: number) => new Intl.NumberFormat("vi-VN", { style: "c
 export type Price = {
   amount: number; priceType: string; packagingName: string; minimumQuantity: number; packageNote?: string;
   packageQuantity?: number; unit?: string; priceList?: string | null; supplier?: string | null;
+  isDemo?: boolean;
 };
 export type Item = { productName: string; category?: string; variant: string; sourcePages: number[]; prices: Price[] };
 
@@ -20,9 +21,9 @@ export function priceAnswer(items: Item[]): string {
         ? "chưa xác nhận ngưỡng giá sỉ"
         : price.minimumQuantity > 1 ? `tối thiểu ${number.format(price.minimumQuantity)} ${price.packagingName}` : "";
       const contents = packageContents.replace(/^ · /, " · ");
-      return `${tier}: ${formatVnd(price.amount)} / ${price.packagingName}${contents}${threshold ? ` (${threshold})` : ""}`;
+      return `${price.isDemo ? "Giá demo" : tier}: ${formatVnd(price.amount)} / ${price.packagingName}${contents}${threshold ? ` (${threshold})` : ""}${price.isDemo ? " — giá giả lập, chưa phải giá bán chính thức" : ""}`;
     });
-    const priceSources = [...new Set(item.prices.map((price) => [price.priceList, price.supplier].filter(Boolean).join(" · ")).filter(Boolean))];
+    const priceSources = [...new Set(item.prices.map((price) => price.isDemo ? "Giá giả lập" : [price.priceList, price.supplier].filter(Boolean).join(" · ")).filter(Boolean))];
     const source = [...priceSources, item.sourcePages.length ? `trang ${item.sourcePages.join(", ")}` : "chưa có trang nguồn"];
     return `${item.productName} — ${item.variant}: ${prices.join("; ")}.${meaning ? ` Diễn giải quy cách: ${meaning}.` : ""} Nguồn: ${source.join(" · ")}.`;
   }).join("\n");

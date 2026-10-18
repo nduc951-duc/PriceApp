@@ -14,6 +14,7 @@ import { CustomerCartPanel } from "@/components/customer-cart-panel";
 import { useModalFocus } from "@/hooks/use-modal-focus";
 import { PriceQuestionAssistant } from "@/components/price-question-assistant";
 import { matchesCatalogQuery } from "@/features/search/parser";
+import { DemoPriceLabel } from "@/components/demo-price-label";
 
 type Receipt = Awaited<ReturnType<typeof submitPublicCustomerOrder>>;
 function groupKey(p: PublicPrice) { return JSON.stringify([p.category, p.name, p.variant, p.specification]); }
@@ -95,6 +96,10 @@ export function CustomerStorefront() {
       const publicPrice = catalog.items.find(candidate => candidate.priceId === price.id);
       if (!publicPrice) {
         setRagCartError("Mức giá này không còn được bán. Hãy chọn mặt hàng khác trong bảng giá hiện hành.");
+        return;
+      }
+      if (!publicPrice.purchasable || publicPrice.isDemo) {
+        setRagCartError("Đây là giá demo, chưa thể thêm vào đơn hàng.");
         return;
       }
       if (publicPrice.version !== price.version) {
@@ -208,12 +213,13 @@ export function CustomerStorefront() {
           : <div className="divide-y divide-gray-200">{groups.map(group => <article key={groupKey(group.first)} className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.9fr)] lg:grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(230px,0.9fr)]">
             <div className="min-w-0"><h2 className="break-words [overflow-wrap:anywhere] text-base font-semibold">{group.first.name}</h2><p className="mt-1 break-words [overflow-wrap:anywhere] text-sm text-gray-600">{group.first.variant}{group.first.specification && ` · ${group.first.specification}`}</p><p className="mt-2 break-words [overflow-wrap:anywhere] text-sm text-gray-500">{group.first.category}</p></div>
             <div className="min-w-0 divide-y divide-gray-200">{[...group.prices].sort((a, b) => Number(a.priceType === "wholesale") - Number(b.priceType === "wholesale") || a.packageQuantity - b.packageQuantity || a.priceId - b.priceId).map(price => <div key={price.priceId} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-              <div className="min-w-0 flex-1"><p className="text-sm text-gray-600">{price.priceType === "wholesale" ? "Giá sỉ" : "Giá lẻ"} · {price.packaging}</p><p className="mt-1 text-xs text-gray-500">{formatPackageContents(price.packageQuantity, price.unit)}</p><p className="break-words [overflow-wrap:anywhere] font-semibold tabular-nums">{formatVnd(price.price)}{getSellingUnitLabel(price.packaging) && <span className="text-sm font-normal text-gray-500"> / {getSellingUnitLabel(price.packaging)}</span>}</p>{price.minimumQuantity > 1 && <p className="mt-1 break-words text-sm text-gray-600">{formatMinimumPackageQuantity(price.minimumQuantity, price.packaging, price.packageQuantity, price.unit)}</p>}</div>
-              <div className="flex max-w-full shrink-0 items-center gap-2"><TextInput className="w-20" type="number" disabled={submitting} aria-label={`Số lượng ${getSellingUnitLabel(price.packaging) ?? "đơn vị bán"} ${price.name}, ${price.priceType === "wholesale" ? "giá sỉ" : "giá lẻ"}`} min={price.minimumQuantity} max={CUSTOMER_ORDER_MAX_QUANTITY} step="any" value={quantities[price.priceId] ?? price.minimumQuantity} onChange={e => setQuantities(current => ({ ...current, [price.priceId]: Number(e.target.value) }))}/><Button color="light" aria-label={`Thêm giá ${price.priceType === "wholesale" ? "sỉ" : "lẻ"}`} disabled={submitting || (cart.length >= CUSTOMER_ORDER_MAX_ITEMS && !cart.some(line => line.priceId === price.priceId)) || !Number.isFinite(quantities[price.priceId] ?? price.minimumQuantity) || (quantities[price.priceId] ?? price.minimumQuantity) < price.minimumQuantity || (quantities[price.priceId] ?? price.minimumQuantity) > CUSTOMER_ORDER_MAX_QUANTITY} onClick={() => {
+              <div className="min-w-0 flex-1"><p className="flex items-center gap-2 text-sm text-gray-600">{price.isDemo ? <DemoPriceLabel/> : price.priceType === "wholesale" ? "Giá sỉ" : "Giá lẻ"} · {price.packaging}</p><p className="mt-1 text-xs text-gray-500">{formatPackageContents(price.packageQuantity, price.unit)}</p><p className="break-words [overflow-wrap:anywhere] font-semibold tabular-nums">{formatVnd(price.price)}{getSellingUnitLabel(price.packaging) && <span className="text-sm font-normal text-gray-500"> / {getSellingUnitLabel(price.packaging)}</span>}</p>{price.isDemo && <p className="mt-1 text-sm text-amber-800">Giá giả lập để trải nghiệm, chưa phải giá bán chính thức.</p>}{price.minimumQuantity > 1 && <p className="mt-1 break-words text-sm text-gray-600">{formatMinimumPackageQuantity(price.minimumQuantity, price.packaging, price.packageQuantity, price.unit)}</p>}</div>
+              {price.purchasable && !price.isDemo && <div className="flex max-w-full shrink-0 items-center gap-2"><TextInput className="w-20" type="number" disabled={submitting} aria-label={`Số lượng ${getSellingUnitLabel(price.packaging) ?? "đơn vị bán"} ${price.name}, ${price.priceType === "wholesale" ? "giá sỉ" : "giá lẻ"}`} min={price.minimumQuantity} max={CUSTOMER_ORDER_MAX_QUANTITY} step="any" value={quantities[price.priceId] ?? price.minimumQuantity} onChange={e => setQuantities(current => ({ ...current, [price.priceId]: Number(e.target.value) }))}/><Button color="light" aria-label={`Thêm giá ${price.priceType === "wholesale" ? "sỉ" : "lẻ"}`} disabled={submitting || (cart.length >= CUSTOMER_ORDER_MAX_ITEMS && !cart.some(line => line.priceId === price.priceId)) || !Number.isFinite(quantities[price.priceId] ?? price.minimumQuantity) || (quantities[price.priceId] ?? price.minimumQuantity) < price.minimumQuantity || (quantities[price.priceId] ?? price.minimumQuantity) > CUSTOMER_ORDER_MAX_QUANTITY} onClick={() => {
                 const quantity = quantities[price.priceId] ?? price.minimumQuantity;
                 changeCart(current => setCustomerCartQuantity(current, price, (current.find(line => line.priceId === price.priceId)?.quantity ?? 0) + quantity));
                 setAnnouncement(`Đã thêm ${price.name} vào giỏ hàng`);
               }}><Plus size={16}/><span className="ml-1">Thêm</span></Button></div>
+              }
             </div>)}</div>
           </article>)}</div>}
         </section>

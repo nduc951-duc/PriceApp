@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type CatalogPrice = {
   id: number; version: number; amount: number; price_type: string; minimum_quantity: number;
   active: boolean; valid_from: string; valid_to: string | null;
-  price_lists: { name: string; effective_date: string; is_sample?: boolean; suppliers: { name: string; active?: boolean } | null } | null;
+  price_lists: { name: string; effective_date: string; is_sample?: boolean; is_demo?: boolean; suppliers: { name: string; active?: boolean } | null } | null;
 };
 
 export type RagCatalogVariant = {
@@ -26,13 +26,30 @@ export type RagCatalogPage = {
   nextCursor: number | null;
 };
 
+function preferCurrentRealPrices(variants: RagCatalogVariant[]) {
+  return variants.map(variant => {
+    const allPrices = variant.packaging_options.flatMap(pack => pack.prices);
+    const hasRealPrice = allPrices.some(price => price.price_lists?.is_sample !== true
+      && price.price_lists?.suppliers?.active !== false);
+    if (!hasRealPrice) return variant;
+    return {
+      ...variant,
+      packaging_options: variant.packaging_options.map(pack => ({
+        ...pack,
+        prices: pack.prices.filter(price => price.price_lists?.is_demo !== true
+          && !price.price_lists?.name.startsWith("DEMO —")),
+      })),
+    };
+  });
+}
+
 type PublicCatalogRow = {
   attributes?: Record<string, unknown>;
   product_id: number; product_name: string; product_description?: string | null; category_name: string; product_aliases: string[] | null;
   variant_id: number; display_name: string; raw_specification: string | null; source_pages: number[] | null;
   packaging_id: number | null; packaging_name: string | null; package_quantity: number | null; unit: string | null; package_note: string | null;
   price_id: number | null; price_version: number | null; price_amount: number | null; price_type: string | null;
-  minimum_quantity: number | null; price_list_name: string | null; supplier_name: string | null;
+  minimum_quantity: number | null; price_list_name: string | null; supplier_name: string | null; is_demo?: boolean;
 };
 
 type ExistingPublicRow = Omit<PublicCatalogRow, "product_id" | "product_aliases"> & { product_id?: number; product_aliases?: string[]; product_description?: string | null; verification_status: string };
@@ -84,6 +101,8 @@ function groupPublicCatalogRows(rows: PublicCatalogRow[]): RagCatalogVariant[] {
           price_lists: row.price_list_name ? {
             name: row.price_list_name,
             effective_date: "",
+            is_sample: row.is_demo === true || row.price_list_name.startsWith("DEMO —"),
+            is_demo: row.is_demo === true || row.price_list_name.startsWith("DEMO —"),
             suppliers: row.supplier_name ? { name: row.supplier_name } : null,
           } : null,
         });
@@ -114,7 +133,7 @@ export function ragCatalogRepository(client: SupabaseClient, publicCatalogOnly =
       if (!Array.isArray(payload.items) || !Number.isInteger(Number(payload.total_count)) || Number(payload.total_count) < 0) {
         throw new Error("Catalog page RPC returned an invalid page payload.");
       }
-      const items = payload.items as RagCatalogVariant[];
+      const items = preferCurrentRealPrices(payload.items as RagCatalogVariant[]);
       if (items.some((item) => item.verification_status !== "verified")) {
         throw new Error("Catalog page RPC returned an ineligible variant.");
       }
@@ -142,7 +161,7 @@ export function ragCatalogRepository(client: SupabaseClient, publicCatalogOnly =
         return { data: data ? groupExistingPublicRows(data as ExistingPublicRow[]) : null, error };
       }
       return client.from("product_variants").select(
-        "id,product_id,display_name,raw_specification,attributes,verification_status,products!inner(name,description,categories!inner(name),product_aliases(alias)),packaging_options(id,name,quantity,base_unit,note,prices(id,version,amount,price_type,minimum_quantity,active,valid_from,valid_to,price_lists(name,effective_date,is_sample,suppliers(name,active))))",
+        "id,product_id,display_name,raw_specification,attributes,verification_status,products!inner(name,description,categories!inner(name),product_aliases(alias)),packaging_options(id,name,quantity,base_unit,note,prices(id,version,amount,price_type,minimum_quantity,active,valid_from,valid_to,price_lists(name,effective_date,is_sample,is_demo,suppliers(name,active))))",
       ).in("id", ids).eq("active", true).eq("verification_status", "verified").eq("products.active", true).eq("products.categories.active", true);
     },
     expandVerifiedGroups: async (seedVariantIds: number[]): Promise<PublicRpcResult> => {
@@ -162,7 +181,7 @@ export function ragCatalogRepository(client: SupabaseClient, publicCatalogOnly =
       const productIds = [...new Set(((seeds ?? []) as Array<{ product_id: number }>).map((row) => row.product_id))];
       if (!productIds.length) return { data: [], error: null };
       const { data, error } = await client.from("product_variants").select(
-        "id,product_id,display_name,raw_specification,attributes,verification_status,products!inner(name,categories!inner(name),product_aliases(alias)),packaging_options(id,name,quantity,base_unit,note,prices(id,version,amount,price_type,minimum_quantity,active,valid_from,valid_to,price_lists(name,effective_date,is_sample,suppliers(name,active)))),variant_sources(source_page_id)",
+        "id,product_id,display_name,raw_specification,attributes,verification_status,products!inner(name,categories!inner(name),product_aliases(alias)),packaging_options(id,name,quantity,base_unit,note,prices(id,version,amount,price_type,minimum_quantity,active,valid_from,valid_to,price_lists(name,effective_date,is_sample,is_demo,suppliers(name,active)))),variant_sources(source_page_id)",
       ).in("product_id", productIds).eq("active", true).eq("verification_status", "verified").eq("products.active", true).eq("products.categories.active", true);
       if (error) return { data: null, error };
       const variants = (data ?? []) as unknown as RagCatalogVariant[];

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { catalogUpdateSchema, priceUndoSchema, priceUpdateSchema } from "../schemas/prices.schema.js";
+import { catalogUpdateSchema, demoPriceApplySchema, demoPriceRollbackSchema, priceUndoSchema, priceUpdateSchema } from "../schemas/prices.schema.js";
 import { signedUrlBody } from "../schemas/source-files.schema.js";
 import { customerOrderBodySchema, customerOrderIdParamsSchema, customerOrderListSchema, customerOrderReceiptSchema, customerOrderStatusBodySchema, publicCatalogResponseSchema } from "../schemas/customer-orders.schema.js";
 
@@ -12,7 +12,7 @@ const catalogPrice = z.object({
   id, priceId: id, categoryId: id, productId: id, variantId: id, packagingId: id,
   name: text, category: text, variantDisplayName: text, spec: text, variantSpec: text,
   packageName: text, packageQuantity: z.number(), packageNote: text, priceType: text,
-  minimumQuantity: z.number(), price: z.number(), unit: text, supplier: text,
+  minimumQuantity: z.number(), price: z.number(), isDemo: z.boolean(), purchasable: z.boolean(), unit: text, supplier: text,
   sourcePages: z.array(z.number()), sourceFiles: z.array(text), validFrom: text, validTo: text.nullable(),
   status: z.enum(["verified", "needs_review", "unreadable"]), version: z.number().int(),
 });
@@ -20,6 +20,13 @@ const catalogResponse = z.object({ entries: z.array(catalogEntry), prices: z.arr
 const meResponse = z.object({ userId: text, role });
 const priceWriteResponse = z.object({ amount: z.number(), version: z.number().int() });
 const priceUpdateResponse = priceWriteResponse.extend({ historyId: id });
+const demoPricePreviewResponse = z.object({
+  batchId: z.string(), snapshotHash: z.string(), ruleVersion: z.string(), count: z.number().int().nonnegative(),
+  items: z.array(z.object({ variantId: id, productId: id, packagingId: id, quantity: z.number(), unit: text,
+    amount: z.number(), method: z.enum(["same_package_median", "fallback_fixture"]), referencePriceIds: z.array(id) })),
+});
+const demoPriceApplyResponse = z.object({ batchId: z.string(), created: z.number().int().nonnegative(), resumed: z.boolean() });
+const demoPriceRollbackResponse = z.object({ batchId: z.string(), deactivated: z.number().int().nonnegative() });
 const catalogUpdateResponse = z.object({
   ok: z.literal(true), category: z.object({ id, name: text }), product: z.object({ id, name: text }),
   variant: z.object({ id, displayName: text, rawSpecification: text }),
@@ -66,7 +73,7 @@ const verificationStatus = z.enum(["verified", "needs_review", "unreadable", "sa
 const ragPrice = z.object({
   id, packagingId: id, version: z.number().int(), amount: z.number(), priceType: z.enum(["retail", "wholesale", "dealer"]), minimumQuantity: z.number(),
   packagingName: text, packageQuantity: z.number(), unit: text, packageNote: text,
-  priceList: text.nullable(), supplier: text.nullable(), verificationStatus,
+  priceList: text.nullable(), supplier: text.nullable(), isDemo: z.boolean(), purchasable: z.boolean(), verificationStatus,
 });
 const ragItem = z.object({
   id, productName: text, category: text, variant: text, verificationStatus,
@@ -125,6 +132,9 @@ export const apiContracts = [
   { method: "post", path: "/api/v1/prices/{priceId}/update", operationId: "updatePrice", summary: "Cập nhật giá có kiểm toán", auth: true, body: priceUpdateSchema, params: priceIdPathParams, response: { 200: priceUpdateResponse } },
   { method: "post", path: "/api/v1/catalog/update", operationId: "updateCatalogItem", summary: "Cập nhật mặt hàng", auth: true, body: catalogUpdateSchema, response: { 200: catalogUpdateResponse } },
   { method: "post", path: "/api/v1/prices/undo", operationId: "undoPrice", summary: "Hoàn tác giá có kiểm toán", auth: true, body: priceUndoSchema, response: { 200: priceWriteResponse } },
+  { method: "get", path: "/api/v1/admin/demo-prices/preview", operationId: "previewDemoPrices", summary: "Xem trước giá demo còn thiếu", auth: true, owner: true, response: { 200: demoPricePreviewResponse } },
+  { method: "post", path: "/api/v1/admin/demo-prices/apply", operationId: "applyDemoPrices", summary: "Tạo giá demo có kiểm toán", auth: true, owner: true, body: demoPriceApplySchema, response: { 200: demoPriceApplyResponse } },
+  { method: "post", path: "/api/v1/admin/demo-prices/rollback", operationId: "rollbackDemoPrices", summary: "Hoàn tác một lô giá demo", auth: true, owner: true, body: demoPriceRollbackSchema, response: { 200: demoPriceRollbackResponse } },
   { method: "post", path: "/api/v1/rag/query", operationId: "queryKnowledgeBase", summary: "Tra cứu tài liệu và giá", auth: true, body: ragQueryBody, response: { 200: ragQueryResponse } },
   { method: "post", path: "/api/v1/public/rag/query", operationId: "queryPublicKnowledgeBase", summary: "Khách tra cứu giá từ catalog công khai đã xác minh", auth: false, body: publicRagQueryBody, response: { 200: ragQueryResponse } },
   { method: "post", path: "/api/v1/public/rag/feedback", operationId: "submitPublicRagFeedback", summary: "Khách gửi phản hồi gắn với một câu trả lời RAG", auth: false, body: submitPublicRagFeedbackBody, response: { 200: z.object({ saved: z.literal(true) }) } },

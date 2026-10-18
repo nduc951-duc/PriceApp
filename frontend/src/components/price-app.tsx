@@ -54,6 +54,8 @@ type Item = {
   priceType: string;
   minimumQuantity: number;
   price: number;
+  isDemo: boolean;
+  purchasable: boolean;
   unit: string;
   supplier: string;
   sourcePages: number[];
@@ -61,6 +63,9 @@ type Item = {
   status: "verified" | "needs_review" | "unreadable";
   version: number;
 };
+function sellablePrices<T extends { isDemo: boolean; purchasable: boolean }>(prices: T[]) {
+  return prices.filter(price => price.purchasable && !price.isDemo);
+}
 type ProductGroup = {
   name: string;
   category: string;
@@ -213,13 +218,13 @@ export function PriceApp() {
         const cached = await readSnapshot<Item[]>("catalog");
         const cachedEntries = await readSnapshot<CatalogEntry[]>("catalog-entries");
         if (cached) {
-          setItems(cached.data);
+          setItems(sellablePrices(cached.data));
           setSynced(cached.syncedAt);
           const params = new URLSearchParams(window.location.search);
           const expectedPriceId = Number(params.get("priceId"));
           const expectedPriceVersion = Number(params.get("priceVersion"));
           if (Number.isSafeInteger(expectedPriceId) && expectedPriceId > 0 && Number.isSafeInteger(expectedPriceVersion) && expectedPriceVersion > 0) {
-            setChatPriceReview({ priceId: expectedPriceId, expectedVersion: expectedPriceVersion, current: cached.data.find((item) => item.priceId === expectedPriceId) ?? null, acknowledged: false, requiresFreshCheck: true });
+            setChatPriceReview({ priceId: expectedPriceId, expectedVersion: expectedPriceVersion, current: sellablePrices(cached.data).find((item) => item.priceId === expectedPriceId) ?? null, acknowledged: false, requiresFreshCheck: true });
           }
         }
         if (cachedEntries) {
@@ -252,7 +257,7 @@ export function PriceApp() {
         return;
       }
       const entries = response.entries;
-      const loaded = response.prices;
+      const loaded = sellablePrices(response.prices);
       const params = new URLSearchParams(window.location.search);
       const expectedPriceId = Number(params.get("priceId"));
       const expectedPriceVersion = Number(params.get("priceVersion"));
@@ -539,17 +544,17 @@ export function PriceApp() {
     }
     const latestItem = latestCatalog.prices.find((item) => item.priceId === option.item.priceId);
     if (!latestItem) {
-      setItems(latestCatalog.prices);
+      setItems(sellablePrices(latestCatalog.prices));
       setError("Mức giá này đã hết hiệu lực hoặc không còn trong bảng giá. Hãy chọn lại.");
       return;
     }
     if (latestItem.status !== "verified") {
-      setItems(latestCatalog.prices);
+      setItems(sellablePrices(latestCatalog.prices));
       setError("Mức giá này chưa được duyệt để đưa vào báo giá. Hãy chọn mức giá đã duyệt.");
       return;
     }
     if (hasInvoicePriceChanged(option.item, latestItem)) {
-      setItems(latestCatalog.prices);
+      setItems(sellablePrices(latestCatalog.prices));
       setChatPriceReview({ priceId: latestItem.priceId, expectedVersion: option.item.version, current: latestItem, acknowledged: false, requiresFreshCheck: false });
       setError("Giá hoặc bao bì vừa đổi. Hãy xem lại và xác nhận mức hiện tại trước khi thêm.");
       return;
@@ -616,10 +621,11 @@ export function PriceApp() {
       setQuoteMessage("Không xác minh được giá hiện hành. Hãy thử lại trước khi sao chép báo giá.");
       return;
     }
-    const freshById = new Map(latestCatalog.prices.map((item) => [item.priceId, item]));
+    const freshSellablePrices = sellablePrices(latestCatalog.prices);
+    const freshById = new Map(freshSellablePrices.map((item) => [item.priceId, item]));
     const unverifiedLine = invoice.find((line) => freshById.get(line.item.priceId)?.status !== "verified");
     if (unverifiedLine) {
-      setItems(latestCatalog.prices);
+      setItems(freshSellablePrices);
       setQuoteMessage("Có dòng giá chưa được duyệt hoặc đã hết hiệu lực; hãy chọn lại trước khi sao chép báo giá.");
       return;
     }
@@ -628,13 +634,13 @@ export function PriceApp() {
       return !latest || hasInvoicePriceChanged(line.item, latest);
     });
     if (changedLine) {
-      setItems(latestCatalog.prices);
+      setItems(freshSellablePrices);
       const latest = freshById.get(changedLine.item.priceId);
       if (latest) setChatPriceReview({ priceId: latest.priceId, expectedVersion: changedLine.item.version, current: latest, acknowledged: false, requiresFreshCheck: false });
       setQuoteMessage(latest ? "Giá hoặc bao bì vừa đổi. Hãy xác nhận lại rồi mới sao chép." : "Một mức giá đã hết hiệu lực. Hãy chọn lại sản phẩm trong bảng hiện tại.");
       return;
     }
-    setItems(latestCatalog.prices);
+    setItems(freshSellablePrices);
     const lines = activeInvoice.map((line, index) =>
       `${index + 1}. ${line.item.name} · ${displaySpecification(line.item.variantSpec)} · ${line.packageCount} ${displayItemPackageName(line.item)} × ${formatVnd(line.item.price)} = ${formatVnd(line.packageCount * line.item.price)}`,
     );

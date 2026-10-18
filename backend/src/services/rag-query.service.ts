@@ -18,7 +18,7 @@ import { catalogSpecificationMeaning } from "../rag/catalog-specification.js";
 
 
 type Match = { id: number; chunk_key: string; source_page_id: number | null; source_revision: number | null; source_start: number | null; source_end: number | null; product_variant_id: number | null; content: string; metadata: Record<string, unknown>; similarity: number };
-type PriceRow = { id: number; version: number; amount: number | string; price_type: string; minimum_quantity: number | string; active: boolean; valid_from: string; valid_to: string | null; price_lists: { name: string; effective_date: string; is_sample?: boolean; suppliers: { name: string; active?: boolean } | null } | null };
+type PriceRow = { id: number; version: number; amount: number | string; price_type: string; minimum_quantity: number | string; active: boolean; valid_from: string; valid_to: string | null; price_lists: { name: string; effective_date: string; is_sample?: boolean; is_demo?: boolean; suppliers: { name: string; active?: boolean } | null } | null };
 type CatalogRow = {
   id: number; product_id?: number; display_name: string; raw_specification: string | null; verification_status: string; attributes?: Record<string, unknown>;
   products: { name: string; description?: string | null; categories: { name: string } | null; product_aliases: { alias: string }[] | null } | null;
@@ -30,6 +30,22 @@ type EligibleSource = { product_variant_id: number; source_page_id: number; page
 function isCurrentPriceRow(price: PriceRow, now = Date.now()) {
   return price.active && Date.parse(price.valid_from) <= now && (!price.valid_to || Date.parse(price.valid_to) > now)
     && price.price_lists?.is_sample !== true && price.price_lists?.suppliers?.active !== false;
+}
+
+function isCurrentPriceForMatching(price: PriceRow, now = Date.now()) {
+  return price.active && Date.parse(price.valid_from) <= now && (!price.valid_to || Date.parse(price.valid_to) > now)
+    && price.price_lists?.suppliers?.active !== false
+    && (price.price_lists?.is_sample !== true || price.price_lists.is_demo === true);
+}
+
+function isCatalogPriceVisible(row: CatalogRow, price: PriceRow, now = Date.now()) {
+  const current = price.active && Date.parse(price.valid_from) <= now && (!price.valid_to || Date.parse(price.valid_to) > now)
+    && price.price_lists?.suppliers?.active !== false;
+  if (!current) return false;
+  if (price.price_lists?.is_sample !== true) return true;
+  if (price.price_lists.is_demo !== true) return false;
+  const hasRealPrice = row.packaging_options.some(pack => pack.prices.some(candidate => isCurrentPriceRow(candidate, now)));
+  return !hasRealPrice;
 }
 
 function safeClarification(answer: string) {
@@ -159,7 +175,7 @@ async function queryCompleteCatalogList(
         name: pack.name,
         quantity: Number(pack.quantity),
         unit: pack.base_unit,
-        activeTiers: [...new Set(pack.prices.filter((price) => isCurrentPriceRow(price)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
+        activeTiers: [...new Set(pack.prices.filter((price) => isCatalogPriceVisible(row, price)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
       })),
     };
     return matchesNamedCandidate(candidate, query)
@@ -167,7 +183,7 @@ async function queryCompleteCatalogList(
   });
   const items = matchedRows.map((row) => {
     const prices = row.packaging_options.flatMap((pack) => pack.prices
-      .filter((price) => isCurrentPriceRow(price, now))
+      .filter((price) => isCatalogPriceVisible(row, price, now))
       .filter((price) => !requestedTier || price.price_type === requestedTier)
       .map((price) => ({
         id: price.id,
@@ -182,6 +198,8 @@ async function queryCompleteCatalogList(
         packageNote: pack.note ?? "",
         priceList: price.price_lists?.name ?? null,
         supplier: price.price_lists?.suppliers?.name ?? null,
+        isDemo: price.price_lists?.is_demo === true,
+        purchasable: price.price_lists?.is_demo !== true,
         verificationStatus: row.verification_status,
       })));
     return {
@@ -285,7 +303,7 @@ async function queryReferencedCurrentPrices(
       unit: pack.base_unit,
       activeTiers: [...new Set(pack.prices.map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
     }, question)).flatMap((pack) => pack.prices
-      .filter((price) => isCurrentPriceRow(price, now))
+      .filter((price) => isCatalogPriceVisible(row, price, now))
       .filter((price) => !understood.tier || price.price_type === understood.tier)
       .map((price) => ({
         id: price.id,
@@ -300,6 +318,8 @@ async function queryReferencedCurrentPrices(
         packageNote: pack.note ?? "",
         priceList: price.price_lists?.name ?? null,
         supplier: price.price_lists?.suppliers?.name ?? null,
+        isDemo: price.price_lists?.is_demo === true || price.price_lists?.name.startsWith("DEMO —") === true,
+        purchasable: price.price_lists?.is_demo !== true && price.price_lists?.name.startsWith("DEMO —") !== true,
         verificationStatus: row.verification_status,
       }))),
   }));
@@ -444,7 +464,7 @@ async function queryRagOperation(body: unknown, client: SupabaseClient, context:
           name: pack.name,
           quantity: Number(pack.quantity),
           unit: pack.base_unit,
-          activeTiers: [...new Set(pack.prices.filter((price) => isCurrentPriceRow(price)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
+          activeTiers: [...new Set(pack.prices.filter((price) => isCatalogPriceVisible(row, price)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
         })),
       };
       return matchesExplicitQuery(candidate, requestTerms)
@@ -484,15 +504,17 @@ async function queryRagOperation(body: unknown, client: SupabaseClient, context:
         name: pack.name,
         quantity: Number(pack.quantity),
         unit: pack.base_unit,
-        activeTiers: [...new Set(pack.prices.filter((price) => isCurrentPriceRow(price)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
+        activeTiers: [...new Set(pack.prices.filter((price) => isCatalogPriceVisible(row, price)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
       }, question)).flatMap((pack) => pack.prices
-        .filter((price) => isCurrentPriceRow(price))
+        .filter((price) => isCatalogPriceVisible(row, price))
         .filter((price) => !understood.tier || price.price_type === understood.tier)
         .map((price) => ({
           id: price.id, packagingId: pack.id, version: Number(price.version), amount: Number(price.amount), priceType: price.price_type,
           minimumQuantity: Number(price.minimum_quantity), packagingName: pack.name,
           packageQuantity: Number(pack.quantity), unit: pack.base_unit, packageNote: pack.note ?? "",
           priceList: price.price_lists?.name ?? null, supplier: price.price_lists?.suppliers?.name ?? null,
+          isDemo: price.price_lists?.is_demo === true || price.price_lists?.name.startsWith("DEMO —") === true,
+          purchasable: price.price_lists?.is_demo !== true && price.price_lists?.name.startsWith("DEMO —") !== true,
           verificationStatus: row.verification_status,
         }))),
     }));
@@ -551,7 +573,7 @@ async function queryRagOperation(body: unknown, client: SupabaseClient, context:
         name: pack.name,
         quantity: Number(pack.quantity),
         unit: pack.base_unit,
-        activeTiers: [...new Set(pack.prices.filter((price) => isCurrentPriceRow(price, now)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
+         activeTiers: [...new Set(pack.prices.filter((price) => isCurrentPriceForMatching(price, now)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
       })),
       };
       const targetMatch = comparisons
@@ -571,15 +593,17 @@ async function queryRagOperation(body: unknown, client: SupabaseClient, context:
       name: pack.name,
       quantity: Number(pack.quantity),
       unit: pack.base_unit,
-      activeTiers: [...new Set(pack.prices.filter((price) => isCurrentPriceRow(price, now)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
+      activeTiers: [...new Set(pack.prices.filter((price) => isCatalogPriceVisible(row, price, now)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
     }, catalogFactsOnly ? catalogIdentityQuestion(question) : question)).flatMap((pack) => pack.prices
-      .filter((price) => isCurrentPriceRow(price, now))
+      .filter((price) => isCatalogPriceVisible(row, price, now))
       .filter((price) => !understood.tier || price.price_type === understood.tier)
       .map((price) => ({
         id: price.id, packagingId: pack.id, version: Number(price.version), amount: Number(price.amount), priceType: price.price_type,
         minimumQuantity: Number(price.minimum_quantity), packagingName: pack.name,
         packageQuantity: Number(pack.quantity), unit: pack.base_unit, packageNote: pack.note ?? "",
         priceList: price.price_lists?.name ?? null, supplier: price.price_lists?.suppliers?.name ?? null,
+        isDemo: price.price_lists?.is_demo === true,
+        purchasable: price.price_lists?.is_demo !== true,
         verificationStatus: row.verification_status,
       })));
     return { id: row.id, productName: row.products?.name ?? row.display_name, category: row.products?.categories?.name ?? "Vật tư", variant: row.raw_specification ?? row.display_name, verificationStatus: row.verification_status, sourcePages: pages, prices };
@@ -695,7 +719,7 @@ async function queryRagOperation(body: unknown, client: SupabaseClient, context:
         name: pack.name,
         quantity: Number(pack.quantity),
         unit: pack.base_unit,
-        activeTiers: [...new Set(pack.prices.filter((price) => isCurrentPriceRow(price, now)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
+        activeTiers: [...new Set(pack.prices.filter((price) => isCurrentPriceForMatching(price, now)).map((price) => price.price_type))] as Array<"retail" | "wholesale" | "dealer">,
       })),
     }, target));
     if (!row) return true;
