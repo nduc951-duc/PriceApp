@@ -46,6 +46,8 @@ export type GroundedResponseValidation =
 
 export interface GroundedResponseRequirements {
   requiredDocumentTerms?: string[];
+  /** Catalog identity facts may cite authoritative SQL rows; advice still needs documents. */
+  allowCatalogFacts?: boolean;
 }
 
 const adviceStopWords = new Set(["cho", "va", "voi", "de", "la", "co", "can", "dung", "su", "phu", "hop", "lap", "tai", "trong", "ngoai"]);
@@ -72,6 +74,22 @@ function blockText(block: GroundedResponse["blocks"][number]) {
   return block.text.normalize("NFC");
 }
 
+function catalogWords(value: string): string[] {
+  return value.normalize("NFC").toLocaleLowerCase("vi-VN").match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+// Catalog identity supports names and specifications, not inferred properties.
+// Keep only neutral presentation/question vocabulary outside the cited identity.
+const catalogConversationWords = new Set(catalogWords([
+  "Mình tìm thấy các quy cách đã xác minh trong danh mục thông tin chi tiết được trình bày bên dưới",
+  "Bạn muốn xem chiều dài nào trong các lựa chọn tìm được hãy cho biết tên mặt hàng cần tra",
+  "Đây là kết quả hiện có chưa tìm thấy đúng yêu cầu vui lòng kiểm tra lại hoặc nói rõ hơn",
+  "của và với về theo này đó những một khác cùng nhóm có thể xem thêm không",
+  "sản phẩm đối chiếu thông số kết quả kích thước bạn cần hỏi đang muốn tìm giúp",
+  "hiểu xét tương tự danh sách khớp chính xác tìm kiếm tra tuy nhiên",
+  "cứu nhiều tùy chọn nhau",
+].join(" ")));
+
 export function validateGroundedResponse(raw: string, packet: EvidencePacket, requirements: GroundedResponseRequirements = {}): GroundedResponseValidation {
   const parsed = parseModelResponse(raw);
   if (parsed === null) return { valid: false, reason: "invalid_json" };
@@ -90,8 +108,23 @@ export function validateGroundedResponse(raw: string, packet: EvidencePacket, re
       const entry = evidenceById.get(id);
       return entry?.kind === "document" && entry.variantId !== null ? [entry.variantId] : [];
     }));
-    if (block.kind !== "clarification" && citedDocumentVariants.size === 0) {
+    if (block.kind !== "clarification" && citedDocumentVariants.size === 0
+      && !(requirements.allowCatalogFacts && block.kind === "narrative" && citedVariants.size > 0)) {
       return { valid: false, reason: "missing_fact_evidence" };
+    }
+    if (requirements.allowCatalogFacts && citedDocumentVariants.size === 0
+      && (block.kind === "narrative" || block.kind === "clarification")) {
+      const supportedWords = new Set(catalogConversationWords);
+      for (const id of block.evidenceIds) {
+        const entry = evidenceById.get(id);
+        if (entry?.kind !== "catalog") continue;
+        for (const word of catalogWords([entry.productName, entry.variant, entry.category, ...(entry.aliases ?? [])].join(" "))) {
+          supportedWords.add(word);
+        }
+      }
+      if (catalogWords(block.text).some(word => !supportedWords.has(word))) {
+        return { valid: false, reason: "missing_fact_evidence" };
+      }
     }
     if ("variantIds" in block) {
       if (block.variantIds.some((id) => !catalogVariantIds.has(id))) return { valid: false, reason: "unknown_variant" };

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError } from "../middleware/errors.js";
 import type { StoredConversationMessageInput } from "../schemas/rag-conversations.schema.js";
+import type { RagHistoryMessage } from "../rag/retrieved-context.js";
 
 const conversationColumns = "id,created_at";
 const messageColumns = "id,role,content,metadata,created_at";
@@ -56,6 +57,23 @@ export async function latestUserQuestion(client: SupabaseClient, ownerId: string
     .maybeSingle();
   if (error) throw new Error("Unable to read conversation context");
   return typeof data?.content === "string" ? data.content : undefined;
+}
+
+/** Keep previous assistant selections as context, never as a historical price authority. */
+export async function recentConversationHistory(client: SupabaseClient, ownerId: string, conversationId: string): Promise<RagHistoryMessage[]> {
+  await requireOwnedConversation(client, ownerId, conversationId);
+  const { data, error } = await client.from("rag_conversation_messages").select("role,content,metadata")
+    .eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(6);
+  if (error) throw new Error("Unable to read recent conversation context");
+  return (data ?? []).reverse().flatMap<RagHistoryMessage>(row => {
+    if (row.role === "user" && typeof row.content === "string") return [{ role: "user" as const, content: row.content.slice(0, 1000) }];
+    if (row.role === "assistant") {
+      const values = row.metadata?.variantIds;
+      const ids = Array.isArray(values) ? values.filter((id: unknown) => Number.isSafeInteger(id) && Number(id) > 0).slice(0, 40) : [];
+      return [{ role: "assistant" as const, content: JSON.stringify({ previous_result_variant_ids: ids, status: row.metadata?.status ?? "unknown" }) }];
+    }
+    return [];
+  });
 }
 
 export async function latestAssistantVariantIds(client: SupabaseClient, ownerId: string, conversationId: string) {

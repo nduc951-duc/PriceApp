@@ -26,6 +26,11 @@ backend/dist/
 *.pem
 
 # debug
+*.log
+*.log.*
+*.stdout
+*.stderr
+/.artifacts/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

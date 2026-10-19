@@ -4,7 +4,7 @@ import parser from "@typescript-eslint/parser";
 export default [
   js.configs.recommended,
   {
-    files: ["src/**/*.ts"],
+    files: ["src/**/*.ts", "tests/**/*.ts"],
     languageOptions: {
       parser,
       parserOptions: { ecmaVersion: "latest", sourceType: "module" },

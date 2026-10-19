@@ -16,7 +16,7 @@
     "openapi:generate": "tsx scripts/generate-contract.ts",
     "api:types": "tsx scripts/generate-contract.ts",
     "openapi:check": "tsx scripts/generate-contract.ts --check",
-    "lint": "eslint src",
+    "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

@@ -1,7 +1,9 @@
 import type { FastifyRequest } from "fastify";
 import { queryRag } from "../services/rag-query.service.js";
 import { ApiError } from "../middleware/errors.js";
-import { appendConversationMessage, createConversation, latestAssistantVariantIds, latestUserQuestion } from "../services/rag-conversations.service.js";
+import { appendConversationMessage, createConversation, latestAssistantVariantIds, latestUserQuestion, recentConversationHistory } from "../services/rag-conversations.service.js";
+import { retrievalFirstEnabled } from "../services/retrieval-first-rag.js";
+import type { RagHistoryMessage } from "../rag/retrieved-context.js";
 import { createRagPublicFeedbackHandle, verifyRagPublicFeedbackHandle } from "../services/rag-public-feedback-handle.js";
 import { ragPublicFeedbackBodySchema } from "../schemas/rag-feedback.schema.js";
 import { submitPublicRagFeedback } from "../services/rag-feedback.service.js";
@@ -13,12 +15,13 @@ export async function ragQuery(request: FastifyRequest) {
     const ownerId = request.auth!.user.id;
     if (!input.conversationId) return await queryRag({ question: input.question }, client);
     const conversation = { id: input.conversationId };
-    const [previousQuestion, previousVariantIds] = await Promise.all([
+    const [previousQuestion, previousVariantIds, history] = await Promise.all([
       latestUserQuestion(client, ownerId, conversation.id),
       latestAssistantVariantIds(client, ownerId, conversation.id),
+      retrievalFirstEnabled() ? recentConversationHistory(client, ownerId, conversation.id) : Promise.resolve(undefined),
     ]);
     await appendConversationMessage(client, ownerId, conversation.id, { role: "user", content: input.question });
-    const result = await queryRag({ question: input.question }, client, { previousQuestion, previousVariantIds });
+    const result = await queryRag({ question: input.question }, client, { previousQuestion, previousVariantIds, history });
     const resultStatus = result.status === "answered" ? "grounded" : result.status === "clarify" ? "needs_clarification" : "abstained";
     const assistantMessage = await appendConversationMessage(client, ownerId, conversation.id, {
       role: "assistant",
@@ -42,8 +45,8 @@ export async function ragQuery(request: FastifyRequest) {
 
 export async function publicRagQuery(request: FastifyRequest) {
   try {
-    const input = request.body as { question: string; previousQuestion?: string; previousVariantIds?: number[] };
-    const result = await queryRag({ question: input.question }, request.server.publicSupabaseFactory(), { previousQuestion: input.previousQuestion, previousVariantIds: input.previousVariantIds }, { publicCatalogOnly: true });
+    const input = request.body as { question: string; previousQuestion?: string; previousVariantIds?: number[]; history?: RagHistoryMessage[] };
+    const result = await queryRag({ question: input.question }, request.server.publicSupabaseFactory(), { previousQuestion: input.previousQuestion, previousVariantIds: input.previousVariantIds, history: input.history }, { publicCatalogOnly: true });
     const secret = request.server.ragFeedbackHmacSecret;
     return secret ? { ...result, publicFeedbackHandle: createRagPublicFeedbackHandle(secret) } : result;
   } catch (error) {

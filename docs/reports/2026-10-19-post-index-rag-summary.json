@@ -1,0 +1,76 @@
+{
+  "scope": "8 distinct public RAG API questions, real providers, current source in injected test app; no before/after baseline; not an embedding benchmark",
+  "checks": [
+    {
+      "question": "tôi muốn mua bulong, bên bạn có những mặt hàng nào",
+      "status": "answered",
+      "count": 47,
+      "latencyMs": 3847,
+      "vectorChunks": 8,
+      "lexicalProducts": 47,
+      "listedBoltIdsMatch": true
+    },
+    {
+      "question": "Bulong bên bạn có những cỡ nào?",
+      "status": "answered",
+      "count": 47,
+      "latencyMs": 3217,
+      "vectorChunks": 8,
+      "lexicalProducts": 47,
+      "listedBoltIdsMatch": true
+    },
+    {
+      "question": "tắc kê sắt 8 ly x 3f",
+      "status": "insufficient_evidence",
+      "count": 0,
+      "latencyMs": 2879,
+      "vectorChunks": 4,
+      "lexicalProducts": 0
+    },
+    {
+      "question": "Tắc kê sắt 8 ly x 3F có quy cách gì?",
+      "status": "insufficient_evidence",
+      "count": 0,
+      "latencyMs": 2005,
+      "vectorChunks": 4,
+      "lexicalProducts": 0
+    },
+    {
+      "question": "Bulong 8 ly x 3F có quy cách gì?",
+      "status": "answered",
+      "count": 1,
+      "latencyMs": 2289,
+      "vectorChunks": 1,
+      "lexicalProducts": 1,
+      "pricesMatch": true
+    },
+    {
+      "question": "Giá Bulong 8 mm x 3 cm?",
+      "status": "answered",
+      "count": 1,
+      "latencyMs": 3523,
+      "vectorChunks": 1,
+      "lexicalProducts": 1,
+      "pricesMatch": true
+    },
+    {
+      "question": "Giá tàu vũ trụ chạy bằng năng lượng mặt trời?",
+      "status": "insufficient_evidence",
+      "count": 0,
+      "latencyMs": 2629,
+      "vectorChunks": 0,
+      "lexicalProducts": 0
+    },
+    {
+      "question": "Tắc kê sắt dùng được cho tường thạch cao không?",
+      "status": "clarify",
+      "count": 0,
+      "latencyMs": 947,
+      "vectorChunks": 0,
+      "lexicalProducts": 0
+    }
+  ],
+  "meanLatencyMs": 2667,
+  "medianLatencyMs": 2754,
+  "initialRateLimitedRequests": 3
+}

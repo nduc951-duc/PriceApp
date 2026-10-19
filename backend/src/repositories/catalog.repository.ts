@@ -44,7 +44,7 @@ export function mapCatalogRows(rows: VariantRow[], now = Date.now()): Pick<Catal
           variantDisplayName: variant.display_name, spec: `${spec} • ${pack.name}`, variantSpec: spec,
           packageName: pack.name, packageQuantity: Number(pack.quantity), packageNote: pack.note ?? "",
           priceType: price.price_type, minimumQuantity: Number(price.minimum_quantity), price: Number(price.amount),
-          isDemo: price.price_lists?.is_demo === true, purchasable: price.price_lists?.is_demo !== true,
+          isDemo: price.price_lists?.is_demo === true, purchasable: true,
           unit: pack.base_unit, supplier: price.price_lists?.suppliers?.name ?? "Chưa rõ nhà cung cấp",
           validFrom: price.valid_from, validTo: price.valid_to,
           status: variant.verification_status, version: price.version });

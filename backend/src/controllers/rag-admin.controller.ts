@@ -2,6 +2,11 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { indexRag, latestRagIndex } from "../services/rag-index.service.js";
 import { healthRag } from "../services/rag-health.service.js";
 import { latestRagIndexJob } from "../services/rag-index-job-status.js";
+import { listIndexedChunks } from "../services/rag-index-chunks.js";
+
+export async function ragIndexedChunks(request: FastifyRequest<{ Params: { page: string } }>) {
+  return listIndexedChunks(request.auth!.client, Number(request.params.page));
+}
 
 export async function ragLatestIndex(request: FastifyRequest) {
   return latestRagIndex(request.auth!.client);

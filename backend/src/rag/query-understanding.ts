@@ -21,9 +21,47 @@ export interface UnderstandQueryOptions {
 
 /** Remove the requested catalog operation before interpreting product identity. */
 export function catalogIdentityQuestion(question: string): string {
-  return question.replace(/(?:thông\s+tin|thong\s+tin|quy\s+cách|quy\s+cach|kích\s+thước|kich\s+thuoc|đóng\s+gói|dong\s+goi|chất\s+liệu|chat\s+lieu|đơn\s+vị|don\s+vi)/giu, " ")
+  return question.replace(/(?:liệt\s+kê|liet\s+ke|thông\s+tin|thong\s+tin|quy\s+cách|quy\s+cach|kích\s+thước|kich\s+thuoc|đóng\s+gói|dong\s+goi|chất\s+liệu|chat\s+lieu|đơn\s+vị|don\s+vi)/giu, " ")
     .replace(/\s+(?:(?:thế|the)\s+nào|ra\s+sao|là\s+gì|la\s+gi|có\s+không|co\s+khong|được\s+không|duoc\s+khong)[?!.]*$/giu, " ")
     .replace(/\s+/gu, " ").trim();
+}
+
+/** Remove only exact conversational spans identified by the model, keeping names
+ * and numerical/material filters protected. Unknown modifiers stay in the query. */
+const CONVERSATION_SPAN_WORDS = new Set([
+  "tôi", "toi", "mình", "minh", "tui", "em", "anh", "chị", "chi", "bạn", "ban", "bên", "ben",
+  "muốn", "muon", "mua", "cần", "can", "hãy", "hay", "giới", "gioi", "thiệu", "thieu",
+  "cho", "giúp", "giup", "xin", "vui", "lòng", "long", "xem", "hỏi", "hoi", "thêm", "them",
+  "và", "va", "với", "voi", "có", "co", "những", "nhung", "các", "cac", "loại", "loai",
+  "sản", "san", "phẩm", "pham", "mặt", "mat", "hàng", "hang", "nào", "nao", "gì", "gi",
+  "một", "mot", "chút", "chut", "nhé", "nhe", "nha", "ạ", "a", "được", "duoc", "không", "khong",
+]);
+
+export function withoutConversationPhrases(question: string, phrases: string[], identities: string[]): string {
+  const protectedTerms = new Set(identities.flatMap(identity => understandQuery(identity).nameTerms)
+    .map(term => normalizeWithOffsets(term).value));
+  let remaining = question;
+  for (const phrase of phrases) {
+    const parsed = understandQuery(phrase);
+    const words = phrase.toLocaleLowerCase("vi-VN").match(/[\p{L}\p{N}]+/gu) ?? [];
+    // The model proposes spans; it cannot authorize deletion of arbitrary
+    // factual words (e.g. an omitted color) by labelling them conversational.
+    if (!words.length || words.some(word => !CONVERSATION_SPAN_WORDS.has(word))
+      || /\d/u.test(phrase) || parsed.material || parsed.specCodes.length || parsed.dimensions.length
+      || parsed.tier || parsed.unit || parsed.package || parsed.quantity !== undefined
+      || parsed.nameTerms.some(term => protectedTerms.has(normalizeWithOffsets(term).value))) continue;
+    const text = phrase.trim();
+    if (!text) continue;
+    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    remaining = remaining.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "giu"), " ");
+  }
+  // A small model may omit a span or include the subject inside it. Keep the
+  // subject protected and remove only independently allowed discourse words;
+  // every unknown modifier (color, finish, brand, etc.) remains a hard guard.
+  if (protectedTerms.size) remaining = remaining.replace(/[\p{L}\p{N}]+/gu, word =>
+    CONVERSATION_SPAN_WORDS.has(word.toLocaleLowerCase("vi-VN"))
+      && !protectedTerms.has(normalizeWithOffsets(word).value) ? " " : word);
+  return remaining.replace(/\s+/gu, " ").trim();
 }
 
 export interface SpecificPriceLookupHint {

@@ -64,7 +64,7 @@ type Item = {
   version: number;
 };
 function sellablePrices<T extends { isDemo: boolean; purchasable: boolean }>(prices: T[]) {
-  return prices.filter(price => price.purchasable && !price.isDemo);
+  return prices.filter(price => price.purchasable);
 }
 type ProductGroup = {
   name: string;
@@ -847,9 +847,9 @@ export function PriceApp() {
     <div className={`min-h-screen ${activeInvoice.length ? "pos-has-quote" : ""}`}>
       <header className="app-blue-navbar pos-header">
         <div className="pos-header-inner">
-          <Link href="/staff#sales-workspace" className="pos-brand" aria-label="Giá Chuẩn - về tra cứu"><span className="pos-brand-mark">đ</span><span className="pos-brand-copy"><b>Giá Chuẩn</b><small>Khu vực nhân viên</small></span></Link>
+          <Link href="/staff#sales-workspace" className="pos-brand" aria-label="Quản Lý - về tra cứu"><span className="pos-brand-mark">đ</span><span className="pos-brand-copy"><b>Quản Lý</b></span></Link>
           <nav className="pos-top-nav" aria-label="Điều hướng chính"><Link href="/staff#sales-workspace" className="pos-nav-active">Tra cứu & bán hàng</Link><Link href="/questions" className="pos-nav-item">Hỏi đáp AI</Link><Button type="button" className="pos-nav-item" onClick={() => setCustomerOrdersOpen(true)}><ClipboardList size={15}/> Đơn khách đặt</Button><Button type="button" className="pos-nav-item" onClick={() => { setSelected(null); requestAnimationFrame(() => document.getElementById("invoice-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}>Báo giá quầy</Button><Link href="/staff/prices" className="pos-nav-item">Cập nhật & sửa giá</Link></nav>
-          <div className="pos-header-actions"><div className="pos-live-badge">{online && serverAvailable ? <Wifi size={13}/> : <WifiOff size={13}/>}<span>{synced ? (online && serverAvailable ? "ĐÃ CẬP NHẬT" : "ĐANG XEM BẢN LƯU") : online && serverAvailable ? "ĐANG KẾT NỐI" : "NGOẠI TUYẾN"}</span></div><span className="pos-header-count">{loading ? "Đang tải…" : items.length + " mức giá"}</span><Button type="button" onClick={() => setInvoiceOpen(true)} className="pos-invoice-button"><ShoppingCart size={18}/><span>Báo giá</span><b>{activeInvoice.length}</b></Button>{logout && <Button type="button" onClick={() => void logout()} className="pos-logout-button">Đăng xuất</Button>}</div>
+          <div className="pos-header-actions">{!(synced && online && serverAvailable) && <div className="pos-live-badge">{online && serverAvailable ? <Wifi size={13}/> : <WifiOff size={13}/>}<span>{synced ? (online && serverAvailable ? "ĐÃ CẬP NHẬT" : "ĐANG XEM BẢN LƯU") : online && serverAvailable ? "ĐANG KẾT NỐI" : "NGOẠI TUYẾN"}</span></div>}<span className="pos-header-count">{loading ? "Đang tải…" : items.length + " mức giá"}</span><Button type="button" onClick={() => setInvoiceOpen(true)} className="pos-invoice-button"><ShoppingCart size={18}/><span>Báo giá</span><b>{activeInvoice.length}</b></Button>{logout && <Button type="button" onClick={() => void logout()} className="pos-logout-button">Đăng xuất</Button>}</div>
         </div>
       </header>
       <main className="pos-main">

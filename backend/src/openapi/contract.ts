@@ -40,6 +40,7 @@ const publicRagQueryBody = z.strictObject({
   question: z.string().trim().min(1).max(1000),
   previousQuestion: z.string().trim().max(1000).optional(),
   previousVariantIds: z.array(id).max(40).optional(),
+  history: z.array(z.strictObject({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(1000) })).max(6).optional(),
 });
 const conversationIdParams = z.strictObject({ conversationId: z.uuid() });
 const conversation = z.object({ id: z.uuid(), created_at: text });
@@ -119,6 +120,10 @@ const embeddingDiagnostic = z.union([failedDiagnostic, z.object({ ok: z.literal(
 const chatDiagnostic = z.union([failedDiagnostic, z.object({ ok: z.literal(true), detail: text, model: text })]);
 const ragHealthResponse = z.object({ ok: z.boolean(), provider: text, database: databaseDiagnostic, embedding: embeddingDiagnostic, chat: chatDiagnostic });
 const priceIdPathParams = z.object({ priceId: z.string().regex(/^[1-9]\d*$/) });
+const indexedChunksResponse = z.object({
+  generation: id.nullable(), page: id, pageSize: id, total: z.number().int().nonnegative(),
+  items: z.array(z.object({ id, content: text, productName: text, variantName: text })),
+});
 
 export const apiContracts = [
   { method: "get", path: "/api/v1/health", operationId: "getHealth", summary: "Kiểm tra trạng thái API", response: { 200: z.object({ status: z.literal("ok") }) } },
@@ -146,6 +151,7 @@ export const apiContracts = [
   { method: "post", path: "/api/v1/rag/conversations/{conversationId}/feedback", operationId: "submitRagFeedback", summary: "Gửi đánh giá câu trả lời RAG", auth: true, params: conversationIdParams, body: submitRagFeedbackBody, response: { 200: z.object({ saved: z.literal(true) }) } },
   { method: "get", path: "/api/v1/admin/rag/feedback", operationId: "getRagFeedbackSummary", summary: "Xem tổng hợp phản hồi RAG", auth: true, owner: true, response: { 200: feedbackSummary } },
   { method: "get", path: "/api/v1/admin/rag/index", operationId: "getRagIndex", summary: "Lấy tiến độ lập chỉ mục", auth: true, owner: true, response: { 200: indexResponse } },
+  { method: "get", path: "/api/v1/admin/rag/chunks/{page}", operationId: "getRagIndexedChunks", summary: "Xem nội dung chunk đã công bố", auth: true, owner: true, params: z.object({ page: z.string().regex(/^[1-9]\d{0,5}$/) }), response: { 200: indexedChunksResponse } },
   { method: "get", path: "/api/v1/admin/rag/index-job", operationId: "getRagIndexJobStatus", summary: "Lấy trạng thái job lập chỉ mục tự động", auth: true, owner: true, response: { 200: indexJobResponse } },
   { method: "post", path: "/api/v1/admin/rag/index", operationId: "buildRagIndex", summary: "Lập chỉ mục tài liệu", auth: true, owner: true, response: { 200: indexRunResponse } },
   { method: "get", path: "/api/v1/admin/rag/health", operationId: "getRagHealth", summary: "Kiểm tra dịch vụ RAG", auth: true, owner: true, response: { 200: ragHealthResponse, 503: z.union([ragHealthResponse, errorResponse]) } },

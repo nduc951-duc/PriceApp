@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Alert, Badge, Button, Card } from "flowbite-react";
 import { Activity, ArrowLeft, Database, LogOut, RefreshCw } from "lucide-react";
+import { RagIndexOverview } from "@/components/rag-index-overview";
 import { useAuthLogout } from "@/components/auth-actions-context";
 import { requestApi, ApiRequestError } from "@/lib/api/client";
 import { isRagHealthDiagnostics, type RagHealthDiagnostics } from "@/lib/api/rag-health";
@@ -11,7 +12,6 @@ import { fetchRagFeedbackSummary, type RagFeedbackSummary } from "@/lib/api/rag-
 
 type IndexRun = NonNullable<ApiResponse<"/api/v1/admin/rag/index", "get">["run"]>;
 type IndexJob = ApiResponse<"/api/v1/admin/rag/index-job", "get">["job"];
-const statusLabels: Record<string, string> = { queued: "Đang chờ worker", running: "Đang lập chỉ mục", completed: "Đã hoàn tất", failed: "Lập chỉ mục thất bại" };
 function message(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError && error.status === 401) return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
   if (error instanceof ApiRequestError && error.status === 403) return "Chỉ chủ cửa hàng được quản lý chỉ mục RAG.";
@@ -72,7 +72,7 @@ export function RagAdmin() {
         progress = await requestApi<ApiResponse<"/api/v1/admin/rag/index", "post">>("/api/v1/admin/rag/index", { method: "POST" });
         setRun(progress);
       } while (progress.status === "running");
-      setNotice("Đã công bố chỉ mục catalog: " + progress.chunks + " chunk; " + progress.indexed + " embedding mới, " + progress.reused + " giữ lại, " + progress.removed + " chunk cũ đã bỏ.");
+      setNotice("Đã hoàn tất lập chỉ mục " + progress.chunks + " chunk.");
       await Promise.all([refreshStatus(), checkHealth()]);
     } catch (cause) { setError(message(cause, "Lập chỉ mục catalog thất bại. Kiểm tra Supabase và model embedding; giá và quy cách vẫn được tra trực tiếp từ catalog.")); }
     finally { setBusy(false); }
@@ -84,7 +84,6 @@ export function RagAdmin() {
     const link = document.createElement("a"); link.href = url; link.download = "rag-feedback-summary.csv"; link.click(); URL.revokeObjectURL(url);
   }
   const db = health?.database;
-  const queueBehind = job && job.requestedRevision > job.completedRevision;
   return <main className="min-h-screen bg-[var(--cream)] p-4 text-[var(--ink)] md:p-8"><div className="mx-auto max-w-5xl space-y-5">
     <header className="flex flex-wrap items-center justify-between gap-4"><div><Link href="/staff" className="inline-flex items-center gap-2 text-sm"><ArrowLeft size={16} /> Về khu vực nhân viên</Link><h1 className="mt-3 flex items-center gap-2 text-2xl font-bold"><Database /> RAG từ danh mục Supabase</h1><p className="mt-2 text-sm text-[var(--muted)]">Tra cứu giá, quy cách và đóng gói từ dữ liệu đã xác minh của cửa hàng.</p></div><Button color="light" onClick={logout ?? undefined}><LogOut size={16} className="mr-2" /> Đăng xuất</Button></header>
     {error && <Alert color="failure" role="alert">{error}</Alert>}
@@ -100,7 +99,7 @@ export function RagAdmin() {
         <Card className="dark:bg-slate-800 dark:text-white"><h2 className="font-semibold">Biến thể đã embedding</h2><p className="text-3xl font-bold">{db?.ok ? db.embeddedVariants ?? "—" : "—"}</p><p className="text-sm">{db?.ok ? (db.missingVariants ?? "—") + " biến thể chưa có vector với model hiện tại" : "Bấm kiểm tra để đọc trạng thái thực tế"}</p></Card>
       </section>
       {health && <Card className="dark:bg-slate-800 dark:text-white"><h2 className="text-lg font-bold">Kết nối dịch vụ</h2>{([["Supabase", health.database], ["Embedding", health.embedding], ["Chat", health.chat]] as const).map(([label, check]) => <div key={label} className="flex flex-wrap items-center gap-2"><Badge color={check.ok ? "success" : "failure"}>{label}: {check.ok ? "Sẵn sàng" : "Chưa sẵn sàng"}</Badge><span className="text-sm">{check.ok ? label === "Supabase" ? "Đọc được catalog và chỉ mục hiện hành." : check.detail : "Kiểm tra cấu hình và kết nối dịch vụ."}</span></div>)}{!health.chat.ok && <p className="text-sm">Chat chưa sẵn sàng: câu hỏi tra giá cụ thể và quy cách vẫn có thể dùng dữ liệu catalog.</p>}</Card>}
-      <Card className="dark:bg-slate-800 dark:text-white"><h2 className="text-lg font-bold">Tiến độ cập nhật</h2>{run ? <p>{statusLabels[run.status]} · {run.checkpoint}/{run.chunks} chunk · model {run.embeddingModel}</p> : <p>Chưa có lần lập chỉ mục. Bạn vẫn có thể tra giá và quy cách từ catalog.</p>}{job ? <><p>{statusLabels[job.status]} · revision yêu cầu {job.requestedRevision}, hoàn tất {job.completedRevision} · thử {job.attempts}/{job.maxAttempts}</p>{queueBehind && <Alert color="warning">Danh mục đã thay đổi, chỉ mục ngữ nghĩa chưa bắt kịp. Worker cần chạy để cập nhật; có thể dùng nút tạo lại embedding catalog ở trên.</Alert>}{job.lastErrorCode && <Alert color="failure">Lỗi indexing: {job.lastErrorCode}. Kiểm tra dịch vụ embedding và quyền truy cập Supabase.</Alert>}</> : <p className="text-sm">Chưa có job trong hàng đợi.</p>}</Card>
+      <RagIndexOverview run={run} job={job} />
       {feedback && <Card className="dark:bg-slate-800 dark:text-white"><h2 className="text-lg font-bold">Phản hồi hỏi đáp</h2><p>{feedback.total} đánh giá · {feedback.helpful} hữu ích · {feedback.notHelpful} cần xem lại</p>{feedback.reasons.map(reason => <p key={reason.reason} className="text-sm">{reason.reason}: {reason.count}</p>)}<Button color="light" onClick={exportFeedback}>Xuất CSV phản hồi</Button></Card>}
     </>}
   </div></main>;

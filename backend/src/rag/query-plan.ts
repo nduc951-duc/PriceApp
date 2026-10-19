@@ -30,6 +30,7 @@ const queryPlanSchema = z.object({
   requests: z.array(requestSchema).max(4),
   confidence: z.number().min(0).max(1).optional(),
   unresolvedFields: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+  conversationPhrases: z.array(z.string().trim().min(1).max(240)).max(12).optional(),
   clarificationQuestion: z.string().trim().min(1).max(240).optional(),
 }).strict().superRefine((plan, context) => {
   if (plan.intent === "clarification") {
@@ -57,13 +58,14 @@ const queryPlanSchema = z.object({
 });
 
 export type RagQueryRequest = z.infer<typeof requestSchema>;
-export type RagQueryPlan = z.infer<typeof queryPlanSchema>;
-export type QueryPlanGenerator = (input: { question: string; context?: string[] }) => Promise<string>;
+export type RagQueryPlan = z.infer<typeof queryPlanSchema> & { understandingSource?: "model" | "rules_fallback" };
+export type QueryPlanGenerator = (input: { question: string; context?: string[]; analysisFeedback?: string }) => Promise<string>;
 
 export interface PlanRagQueryInput {
   question: string;
   context?: string[];
   generate?: QueryPlanGenerator;
+  analysisFeedback?: string;
 }
 
 const MIN_PLAN_CONFIDENCE = 0.55;
@@ -73,27 +75,14 @@ export async function planRagQuery(input: PlanRagQueryInput): Promise<RagQueryPl
   const question = input.question.trim();
   if (!question || question.length > 1000) throw new Error("question must contain between 1 and 1000 characters");
 
-  const fastFamilyPricePlan = createFamilyPricePlan(question);
-  if (fastFamilyPricePlan) return fastFamilyPricePlan;
-  const fastPricePlan = createSpecificPricePlan(question);
-  if (fastPricePlan) return fastPricePlan;
-  const fastProductDiscoveryPlan = createProductDiscoveryPlan(question);
-  if (fastProductDiscoveryPlan) return fastProductDiscoveryPlan;
-  const fastPurchaseCatalogPlan = createPurchaseCatalogPlan(question);
-  if (fastPurchaseCatalogPlan) return fastPurchaseCatalogPlan;
-  const fastVariantListPlan = createNamedVariantListPlan(question);
-  if (fastVariantListPlan) return fastVariantListPlan;
-  const fastFactsPlan = createCatalogFactsPlan(question);
-  if (fastFactsPlan) return fastFactsPlan;
-
   const context = (input.context ?? []).slice(-4).map((item) => item.trim().slice(0, 300)).filter(Boolean);
   const generate = input.generate ?? generateQueryPlanText;
   let raw: string;
   try {
-    raw = await generate({ question, ...(context.length ? { context } : {}) });
+    raw = await generate({ question, ...(context.length ? { context } : {}), ...(input.analysisFeedback ? { analysisFeedback: input.analysisFeedback } : {}) });
   } catch (error) {
     if (error instanceof RagProviderUnavailableError || (error instanceof Error && /RAG_(?:CHAT_MODEL|AI_BASE_URL)/i.test(error.message))) {
-      return clarificationPlan(SAFE_CLARIFICATION);
+      return { ...(planCatalogFallback(question) ?? clarificationPlan(SAFE_CLARIFICATION)), understandingSource: "rules_fallback" };
     }
     throw error;
   }
@@ -104,6 +93,25 @@ export async function planRagQuery(input: PlanRagQueryInput): Promise<RagQueryPl
   } catch {
     return clarificationPlan(SAFE_CLARIFICATION);
   }
+  // Local constrained models sometimes emit blank optional strings instead of
+  // omitting them. Normalize only empty values; invalid intents/types still fail.
+  if (decoded && typeof decoded === "object" && !Array.isArray(decoded)) {
+    const root = decoded as Record<string, unknown>;
+    const removeBlanks = (values: unknown) => Array.isArray(values)
+      ? values.filter(value => typeof value !== "string" || value.trim().length > 0) : values;
+    if ("unresolvedFields" in root) root.unresolvedFields = removeBlanks(root.unresolvedFields);
+    if ("conversationPhrases" in root) root.conversationPhrases = removeBlanks(root.conversationPhrases);
+    if (Array.isArray(root.requests)) for (const raw of root.requests) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+      const request = raw as Record<string, unknown>;
+      for (const key of ["productText", "categoryText", "material", "previousReference"]) {
+        if (typeof request[key] === "string" && !(request[key] as string).trim()) delete request[key];
+      }
+      for (const key of ["specifications", "constraints", "requestedFields"]) {
+        if (key in request) request[key] = removeBlanks(request[key]);
+      }
+    }
+  }
   const parsed = queryPlanSchema.safeParse(decoded);
   if (!parsed.success) return clarificationPlan(SAFE_CLARIFICATION);
   if (parsed.data.intent === "clarification") {
@@ -112,11 +120,33 @@ export async function planRagQuery(input: PlanRagQueryInput): Promise<RagQueryPl
   if (parsed.data.confidence !== undefined && parsed.data.confidence < MIN_PLAN_CONFIDENCE) {
     return clarificationPlan(parsed.data.clarificationQuestion ?? SAFE_CLARIFICATION);
   }
-  // A valid model response may still omit literal identity fields. Never turn a
-  // named catalog lookup into an unfiltered listing, or discard its model code.
+  // Re-read the complete sentence once when the model drops its subject. Do not
+  // substitute the conversational residue for a product name.
+  const explicit = understandQuery(catalogIdentityQuestion(question));
+  const missingIdentity = parsed.data.requests.some(request => !request.productText && !request.categoryText);
+  if (missingIdentity && explicit.nameTerms.length && !input.analysisFeedback) {
+    return planRagQuery({ ...input, generate, analysisFeedback:
+      "The previous plan omitted productText. Re-read the ENTIRE current question, including earlier clauses: the purchase clause names the product and a later introduction clause refers to that same product. Extract only the product name into productText. Do not put words requesting an introduction into the product name. Return the complete corrected plan. Previous plan: " + JSON.stringify(parsed.data) });
+  }
+  if (missingIdentity && explicit.nameTerms.length > 2) return clarificationPlan(SAFE_CLARIFICATION);
+  // A new, explicitly named lookup does not inherit old measurements. A genuine
+  // reference must be resolved by the model and point to wording in this turn.
+  for (const request of parsed.data.requests) {
+    const reference = request.previousReference?.toLocaleLowerCase("vi-VN");
+    const referencesCurrentText = !!reference && question.toLocaleLowerCase("vi-VN").includes(reference);
+    if (parsed.data.requests.length === 1 && context.length && request.productText && !referencesCurrentText) {
+      const named = understandQuery(request.productText).nameTerms;
+      const currentNames = new Set(explicit.nameTerms.map(word => word.toLocaleLowerCase("vi-VN")));
+      if (named.length && named.every(word => currentNames.has(word.toLocaleLowerCase("vi-VN")))) {
+        // Replan the same full question without history; a regex parser cannot
+        // safely replace model-understood prose dimensions such as diameter/length.
+        return planRagQuery({ question, generate });
+      }
+    }
+  }
+  // Retain literal model codes and dimensions, even when an extraction drops one.
   if (parsed.data.intent === "catalog_list" && parsed.data.requests.length === 1) {
     const request = parsed.data.requests[0]!;
-    const explicit = understandQuery(catalogIdentityQuestion(question));
     const productText = uniqueProductText([...explicit.aliases, ...explicit.nameTerms]);
     if (!request.productText && productText) request.productText = productText.slice(0, 200);
     request.specifications = uniqueProductTextValues([
@@ -124,7 +154,14 @@ export async function planRagQuery(input: PlanRagQueryInput): Promise<RagQueryPl
     ]).slice(0, 12);
     if (!request.material && explicit.material) request.material = explicit.material;
   }
-  return parsed.data;
+  return { ...parsed.data, understandingSource: "model" };
+}
+
+/** SQL-only degradation when the model is unavailable, never the normal planner. */
+export function planCatalogFallback(question: string): RagQueryPlan | null {
+  return createFamilyPricePlan(question) ?? createSpecificPricePlan(question)
+    ?? createProductDiscoveryPlan(question) ?? createPurchaseCatalogPlan(question)
+    ?? createNamedVariantListPlan(question) ?? createCatalogFactsPlan(question);
 }
 
 function uniqueProductTextValues(values: string[]): string[] {

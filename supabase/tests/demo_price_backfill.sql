@@ -27,6 +27,7 @@ declare
   resumed boolean;
   deactivated_count integer;
   bad_real_changes integer;
+  order_definition text;
 begin
   select exists (
     select 1 from information_schema.columns
@@ -47,6 +48,14 @@ begin
     join public.suppliers supplier on supplier.id = list.supplier_id
     where list.is_sample and list.is_demo and supplier.active
   ) then raise exception 'active demo price list seed is missing'; end if;
+
+  order_definition := pg_get_functiondef(
+    'public.create_customer_order_request(text,text,text,text,jsonb,uuid,bigint,text)'::regprocedure
+  );
+  if position('and (not pl.is_sample or pl.is_demo)' in order_definition) = 0
+     or position('and not pl.is_sample' in order_definition) > 0 then
+    raise exception 'customer order requests do not accept generated catalog prices';
+  end if;
 
   if has_table_privilege('anon', 'public.demo_price_batches', 'select')
      or has_table_privilege('authenticated', 'public.demo_price_batches', 'select')

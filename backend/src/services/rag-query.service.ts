@@ -12,9 +12,11 @@ import { isVariantListIntent } from "../rag/variant-list-intent.js";
 import { catalogIdentityQuestion, resolveFollowUpQuestion, specificPriceLookupHint, understandQuery, toHardFilters } from "../rag/query-understanding.js";
 import { comparisonTargets, matchesExplicitPackage, matchesExplicitQuery, matchesNamedCandidate } from "../rag/candidate-filters.js";
 import { buildCitations } from "../rag/citations.js";
-import { planRagQuery, type RagQueryPlan, type RagQueryRequest } from "../rag/query-plan.js";
+import { planRagQuery, planCatalogFallback, type RagQueryPlan, type RagQueryRequest } from "../rag/query-plan.js";
 import { resolveVariantReference } from "../rag/variant-reference.js";
 import { catalogSpecificationMeaning } from "../rag/catalog-specification.js";
+import { queryCatalogRag } from "./catalog-rag.service.js";
+import { queryRetrievalFirstRag, retrievalFirstEnabled, type RagConversationContext } from "./retrieval-first-rag.js";
 
 
 type Match = { id: number; chunk_key: string; source_page_id: number | null; source_revision: number | null; source_start: number | null; source_end: number | null; product_variant_id: number | null; content: string; metadata: Record<string, unknown>; similarity: number };
@@ -199,7 +201,7 @@ async function queryCompleteCatalogList(
         priceList: price.price_lists?.name ?? null,
         supplier: price.price_lists?.suppliers?.name ?? null,
         isDemo: price.price_lists?.is_demo === true,
-        purchasable: price.price_lists?.is_demo !== true,
+        purchasable: true,
         verificationStatus: row.verification_status,
       })));
     return {
@@ -319,7 +321,7 @@ async function queryReferencedCurrentPrices(
         priceList: price.price_lists?.name ?? null,
         supplier: price.price_lists?.suppliers?.name ?? null,
         isDemo: price.price_lists?.is_demo === true || price.price_lists?.name.startsWith("DEMO —") === true,
-        purchasable: price.price_lists?.is_demo !== true && price.price_lists?.name.startsWith("DEMO —") !== true,
+        purchasable: true,
         verificationStatus: row.verification_status,
       }))),
   }));
@@ -342,7 +344,8 @@ async function queryReferencedCurrentPrices(
   };
 }
 
-async function queryRagOperation(body: unknown, client: SupabaseClient, context: { previousQuestion?: string; previousVariantIds?: number[] } = {}, options: { publicCatalogOnly?: boolean } = {}, validatedPlan?: RagQueryPlan) {
+/** SQL degradation and validated multi-operation execution; public entry is queryRag below. */
+export async function queryRagOperation(body: unknown, client: SupabaseClient, context: { previousQuestion?: string; previousVariantIds?: number[] } = {}, options: { publicCatalogOnly?: boolean } = {}, validatedPlan?: RagQueryPlan) {
   const chunksRepo = ragChunksRepository(client, options.publicCatalogOnly);
   const pagesRepo = ragPagesRepository(client);
   const catalogRepo = ragCatalogRepository(client, options.publicCatalogOnly);
@@ -362,7 +365,7 @@ async function queryRagOperation(body: unknown, client: SupabaseClient, context:
   }
   let plan;
   try {
-    plan = validatedPlan ?? await planRagQuery({ question, context: context.previousQuestion ? [context.previousQuestion] : [] });
+    plan = validatedPlan ?? planCatalogFallback(question) ?? await planRagQuery({ question, context: context.previousQuestion ? [context.previousQuestion] : [] });
   } catch (error) {
     if (error instanceof RagProviderUnavailableError) {
       return safeClarification("Dịch vụ phân tích câu hỏi tạm thời chưa sẵn sàng. Bạn có thể nêu tên mặt hàng và quy cách cụ thể không?");
@@ -514,7 +517,7 @@ async function queryRagOperation(body: unknown, client: SupabaseClient, context:
           packageQuantity: Number(pack.quantity), unit: pack.base_unit, packageNote: pack.note ?? "",
           priceList: price.price_lists?.name ?? null, supplier: price.price_lists?.suppliers?.name ?? null,
           isDemo: price.price_lists?.is_demo === true || price.price_lists?.name.startsWith("DEMO —") === true,
-          purchasable: price.price_lists?.is_demo !== true && price.price_lists?.name.startsWith("DEMO —") !== true,
+          purchasable: true,
           verificationStatus: row.verification_status,
         }))),
     }));
@@ -603,7 +606,7 @@ async function queryRagOperation(body: unknown, client: SupabaseClient, context:
         packageQuantity: Number(pack.quantity), unit: pack.base_unit, packageNote: pack.note ?? "",
         priceList: price.price_lists?.name ?? null, supplier: price.price_lists?.suppliers?.name ?? null,
         isDemo: price.price_lists?.is_demo === true,
-        purchasable: price.price_lists?.is_demo !== true,
+        purchasable: true,
         verificationStatus: row.verification_status,
       })));
     return { id: row.id, productName: row.products?.name ?? row.display_name, category: row.products?.categories?.name ?? "Vật tư", variant: row.raw_specification ?? row.display_name, verificationStatus: row.verification_status, sourcePages: pages, prices };
@@ -868,9 +871,10 @@ function operationQuestion(requests: RagQueryRequest[]) {
   ].filter(Boolean).join(" ")).join(" và ").slice(0, 1000);
 }
 
-export async function queryRag(body: unknown, client: SupabaseClient, context: { previousQuestion?: string; previousVariantIds?: number[] } = {}, options: { publicCatalogOnly?: boolean } = {}) {
+export async function queryRag(body: unknown, client: SupabaseClient, context: RagConversationContext = {}, options: { publicCatalogOnly?: boolean } = {}) {
   const input = (typeof body === "object" && body !== null ? body : {}) as { question?: unknown };
   const originalQuestion = typeof input.question === "string" ? input.question.trim() : "";
+  if (retrievalFirstEnabled()) return queryRetrievalFirstRag(originalQuestion, client, context, options.publicCatalogOnly === true);
   // Preserve validation, tier conflicts, and validated conversation-reference handling before planning.
   if (!originalQuestion || originalQuestion.length > 1000 || understandQuery(originalQuestion).tierConflict
     || resolveVariantReference(originalQuestion, context.previousVariantIds ?? []).kind !== "none") {
@@ -878,6 +882,10 @@ export async function queryRag(body: unknown, client: SupabaseClient, context: {
   }
   const question = resolveFollowUpQuestion(context.previousQuestion, originalQuestion);
   const plan = await planRagQuery({ question, context: context.previousQuestion ? [context.previousQuestion] : [] });
+  if (plan.understandingSource === "model" && plan.requests.length === 1
+    && ["catalog_list", "product_info", "price_lookup"].includes(plan.intent)) {
+    return queryCatalogRag(question, plan, client, options.publicCatalogOnly === true);
+  }
   const groups = plan.intent === "multi_intent" ? operationGroups(plan) : [];
   if (groups.length <= 1) return queryRagOperation(body, client, context, options, plan);
 

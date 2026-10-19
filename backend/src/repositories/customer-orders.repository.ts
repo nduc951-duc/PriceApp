@@ -45,7 +45,7 @@ export function mapPublicCatalogRows(rows: PublicCatalogRow[]): PublicCatalogIte
       productCode: row.product_code ?? null, aliases: row.aliases ?? [],
       packaging: row.packaging_name, packageQuantity: numbers[0], unit: row.unit, priceId: row.price_id,
       version: row.price_version, priceType: row.price_type, minimumQuantity: numbers[1], price: numbers[2],
-      isDemo: row.is_demo === true, purchasable: row.is_demo !== true }];
+      isDemo: row.is_demo === true, purchasable: true }];
   });
 }
 

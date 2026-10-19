@@ -97,9 +97,9 @@ export async function indexRag(client: SupabaseClient) {
       throw new ApiError(409, "SOURCE_CHANGED", "Nguồn đã thay đổi trong khi lập chỉ mục. Bấm Chạy tiếp để bắt đầu generation mới.");
     }
     stage = "read_existing_chunks";
-    const existing = await allRagRows((start, end) => chunksRepo.existing(start, end));
-    const existingByKey = new Map((existing as Array<{ chunk_key: string; content_hash: string; embedding_model: string; embedding_fingerprint: string | null; embedding: string }>).map((row) => [row.chunk_key, row]));
     const batch = drafts.slice(run.checkpoint, run.checkpoint + BATCH_SIZE);
+    const existing = batch.length ? await retry(() => allRagRows((start, end) => chunksRepo.existing(start, end, batch.map(chunk => chunk.chunk_key)))) : [];
+    const existingByKey = new Map((existing as Array<{ chunk_key: string; content_hash: string; embedding_model: string; embedding_fingerprint: string | null; embedding: string }>).map((row) => [row.chunk_key, row]));
     const changed = batch.filter((chunk) => {
       const old = existingByKey.get(chunk.chunk_key);
       return old?.embedding_fingerprint !== chunkFingerprint(chunk);

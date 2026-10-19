@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { publicRagFeedback, publicRagQuery, ragQuery } from "../../controllers/rag-query.controller.js";
-import { ragLatestIndex, ragIndexJobStatus, ragBuildIndex, ragHealth } from "../../controllers/rag-admin.controller.js";
+import { ragLatestIndex, ragIndexJobStatus, ragBuildIndex, ragHealth, ragIndexedChunks } from "../../controllers/rag-admin.controller.js";
 import { fastifyRouteSchema, getApiContract } from "../../openapi/contract.js";
 import { ragConversationAppend, ragConversationCreate, ragConversationList, ragConversationRead } from "../../controllers/rag-conversations.controller.js";
 import { ragFeedbackRead, ragFeedbackSubmit } from "../../controllers/rag-feedback.controller.js";
@@ -54,6 +54,7 @@ export function registerRagRoutes(app: FastifyInstance): void {
     const owner = { preValidation: [app.authenticate, app.requireRole("owner")] };
     rag.get("/admin/rag/feedback", { ...owner, schema: fastifyRouteSchema(getApiContract("getRagFeedbackSummary")) }, ragFeedbackRead);
     rag.get("/admin/rag/index", { ...owner, schema: fastifyRouteSchema(getApiContract("getRagIndex")) }, ragLatestIndex);
+    rag.get<{ Params: { page: string } }>("/admin/rag/chunks/:page", { ...owner, schema: fastifyRouteSchema(getApiContract("getRagIndexedChunks")) }, ragIndexedChunks);
     rag.get("/admin/rag/index-job", { ...owner, schema: fastifyRouteSchema(getApiContract("getRagIndexJobStatus")) }, ragIndexJobStatus);
     rag.post("/admin/rag/index", { ...owner, schema: fastifyRouteSchema(getApiContract("buildRagIndex")) }, ragBuildIndex);
     rag.get("/admin/rag/health", { ...owner, schema: fastifyRouteSchema(getApiContract("getRagHealth")) }, ragHealth);

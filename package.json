@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "test:dev-runner": "node --test scripts/dev.test.mjs",
+    "test:dev-runner": "node --test tests/scripts/dev.test.mjs",
     "openapi:generate": "npm run openapi:generate --workspace backend",
     "api:types": "npm run api:types --workspace backend",
     "openapi:check": "npm run openapi:check --workspace backend",

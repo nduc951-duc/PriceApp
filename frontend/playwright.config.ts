@@ -25,10 +25,10 @@ if (enabled) {
 }
 
 export default defineConfig({
-  testDir: "./tests",
+  testDir: "./tests/e2e",
   timeout: 30_000,
   use: { baseURL: frontendOrigin, trace: "off" },
-  globalSetup: "./tests/e2e-global-setup.mjs",
+  globalSetup: "./tests/e2e/e2e-global-setup.mjs",
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile", use: { ...devices["Pixel 7"] } },

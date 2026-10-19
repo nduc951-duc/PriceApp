@@ -6,7 +6,7 @@ export const CUSTOMER_ORDER_MAX_ITEMS = 50;
 export const CUSTOMER_ORDER_MAX_QUANTITY = 10_000;
 
 export function addToCustomerCart(cart: CustomerCartLine[], price: PublicPrice): CustomerCartLine[] {
-  if (!price.purchasable || price.isDemo) return cart;
+  if (!price.purchasable) return cart;
   const existing = cart.find(line => line.priceId === price.priceId);
   if (!existing) {
     if (cart.length >= CUSTOMER_ORDER_MAX_ITEMS || price.minimumQuantity > CUSTOMER_ORDER_MAX_QUANTITY) return cart;
@@ -18,7 +18,7 @@ export function addToCustomerCart(cart: CustomerCartLine[], price: PublicPrice):
 }
 
 export function setCustomerCartQuantity(cart: CustomerCartLine[], price: PublicPrice, quantity: number): CustomerCartLine[] {
-  if (!price.purchasable || price.isDemo) return cart.filter(line => line.priceId !== price.priceId);
+  if (!price.purchasable) return cart.filter(line => line.priceId !== price.priceId);
   if (!Number.isFinite(quantity) || quantity <= 0) return cart.filter(line => line.priceId !== price.priceId);
   const clamped = Math.min(CUSTOMER_ORDER_MAX_QUANTITY, Math.max(price.minimumQuantity, quantity));
   if (!cart.some(line => line.priceId === price.priceId)) {
@@ -33,7 +33,7 @@ export function customerCartSubtotal(cart: CustomerCartLine[], prices: PublicPri
   const stalePriceIds: number[] = [];
   for (const line of cart) {
     const price = prices.find(item => item.priceId === line.priceId && item.version === line.version);
-    if (!price || !price.purchasable || price.isDemo) stalePriceIds.push(line.priceId);
+    if (!price || !price.purchasable) stalePriceIds.push(line.priceId);
     else if (line.quantity >= price.minimumQuantity) subtotal += price.price * line.quantity;
   }
   return { subtotal, stalePriceIds };

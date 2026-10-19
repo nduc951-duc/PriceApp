@@ -11,7 +11,6 @@ import { cacheSnapshot, readSnapshot } from "@/features/offline/cache";
 import { ApiRequestError, requestApi } from "@/lib/api/client";
 import { fetchCatalog, type CatalogEntry, type CatalogPrice } from "@/lib/api/catalog";
 import { updatePrice } from "@/lib/api/prices";
-import { DemoPriceLabel } from "@/components/demo-price-label";
 
 type StaffRole = "owner" | "editor" | "viewer";
 type CatalogSnapshot = { entries: CatalogEntry[]; prices: CatalogPrice[]; syncedAt: string };
@@ -48,7 +47,7 @@ export function StaffPriceManagement() {
   const [saveMessage, setSaveMessage] = useState("");
   const [online, setOnline] = useState(true);
   const [demoPreview, setDemoPreview] = useState<DemoPricePreview | null>(null);
-  const [demoBatchId, setDemoBatchId] = useState("");
+  const [demoBatchIds, setDemoBatchIds] = useState<string[]>([]);
   const [demoBusy, setDemoBusy] = useState(false);
   const [demoError, setDemoError] = useState("");
   const [demoMessage, setDemoMessage] = useState("");
@@ -160,37 +159,49 @@ export function StaffPriceManagement() {
       const preview = await requestApi<DemoPricePreview>("/api/v1/admin/demo-prices/preview");
       setDemoPreview(preview);
     } catch {
-      setDemoError("Không tạo được bản xem trước giá demo. Kiểm tra migration và quyền chủ cửa hàng.");
+      setDemoError("Không thể tải bản xem trước mức giá.");
     } finally { setDemoBusy(false); }
   }
 
   async function applyDemoPrices() {
     if (!demoPreview || role !== "owner" || !online || demoBusy) return;
     setDemoBusy(true); setDemoError(""); setDemoMessage("");
+    const createdBatchIds: string[] = [];
+    let createdCount = 0;
     try {
-      const result = await requestApi<{ batchId: string; created: number; resumed: boolean }>("/api/v1/admin/demo-prices/apply", {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ snapshotHash: demoPreview.snapshotHash }),
-      });
-      setDemoBatchId(result.batchId); setDemoPreview(null);
-      setDemoMessage(`Đã tạo ${result.created} giá demo${result.resumed ? " (lô đã nhập trước đó)" : ""}. Giá demo không dùng cho đặt hàng.`);
+      let preview = demoPreview;
+      while (preview.count > 0) {
+        const result = await requestApi<{ batchId: string; created: number; resumed: boolean }>("/api/v1/admin/demo-prices/apply", {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ snapshotHash: preview.snapshotHash }),
+        });
+        createdBatchIds.unshift(result.batchId);
+        createdCount += result.created;
+        if (preview.remainingCount === 0) break;
+        preview = await requestApi<DemoPricePreview>("/api/v1/admin/demo-prices/preview");
+      }
+      setDemoBatchIds(current => [...createdBatchIds, ...current]); setDemoPreview(null);
+      setDemoMessage("\u0110\u00e3 b\u1ed5 sung " + createdCount + " m\u1ee9c gi\u00e1.");
       await load();
-    } catch (error) {
-      setDemoError(error instanceof ApiRequestError && error.status === 409
-        ? "Danh mục đã đổi sau bản xem trước. Hãy tạo lại bản xem trước."
-        : "Không áp dụng được lô giá demo. Hãy tạo bản xem trước mới rồi thử lại.");
+    } catch {
+      if (createdBatchIds.length) setDemoBatchIds(current => [...createdBatchIds, ...current]);
+      setDemoError("\u004b\u0068\u00f4ng th\u1ec3 \u00e1p d\u1ee5ng l\u00f4 n\u00e0y. H\u00e3y xem tr\u01b0\u1edbc l\u1ea1i.");
     } finally { setDemoBusy(false); }
   }
 
   async function rollbackDemoPrices() {
-    if (!demoBatchId || role !== "owner" || !online || demoBusy) return;
+    if (!demoBatchIds.length || role !== "owner" || !online || demoBusy) return;
     setDemoBusy(true); setDemoError(""); setDemoMessage("");
     try {
-      const result = await requestApi<{ batchId: string; deactivated: number }>("/api/v1/admin/demo-prices/rollback", {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ batchId: demoBatchId }),
-      });
-      setDemoBatchId(""); setDemoMessage(`Đã ngừng hiệu lực ${result.deactivated} giá demo.`); await load();
+      let deactivated = 0;
+      for (const batchId of demoBatchIds) {
+        const result = await requestApi<{ batchId: string; deactivated: number }>("/api/v1/admin/demo-prices/rollback", {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ batchId }),
+        });
+        deactivated += result.deactivated;
+      }
+      setDemoBatchIds([]); setDemoMessage("\u0110\u00e3 ng\u1eebng hi\u1ec7u l\u1ef1c " + deactivated + " m\u1ee9c gi\u00e1."); await load();
     } catch {
-      setDemoError("Không hoàn tác được an toàn; lô giá có thể đã được sửa hoặc đã phát sinh đơn hàng.");
+      setDemoError("Unable to undo the added prices. Try again.");
     } finally { setDemoBusy(false); }
   }
 
@@ -214,14 +225,14 @@ export function StaffPriceManagement() {
       {demoError && <Alert color="failure" className="mb-4" role="alert">{demoError}</Alert>}
       {demoMessage && <Alert color="success" className="mb-4" role="status">{demoMessage}</Alert>}
       {role === "owner" && <Card className="mb-5 border-amber-300 bg-amber-50 shadow-none">
-        <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold text-amber-950">Giá demo cho mặt hàng chưa có giá</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-amber-900">Chỉ tạo giá giả lập cho quy cách đã xác minh, đang hoạt động, có bao bì và chưa có giá thật hiện hành. Nhãn demo sẽ xuất hiện ở catalog và chatbot; giá này không dùng để đặt hàng.</p></div>
-          <div className="flex flex-wrap gap-2"><Button color="light" disabled={!online || demoBusy} onClick={() => void previewDemoPrices()}>{demoBusy ? "Đang xử lý…" : "Xem trước"}</Button>{demoBatchId && <Button color="light" disabled={!online || demoBusy} onClick={() => void rollbackDemoPrices()}>Hoàn tác lô gần nhất</Button>}</div>
+        <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold text-amber-950">Bổ sung giá cho mặt hàng chưa có giá</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-amber-900">Bổ sung mức giá cho quy cách hiện có chưa có giá. Dữ liệu quy cách và bao bì được giữ nguyên.</p></div>
+          <div className="flex flex-wrap gap-2"><Button color="light" disabled={!online || demoBusy} onClick={() => void previewDemoPrices()}>{demoBusy ? "Đang xử lý…" : "Xem trước"}</Button>{demoBatchIds.length > 0 && <Button color="light" disabled={!online || demoBusy} onClick={() => void rollbackDemoPrices()}>Undo all added prices</Button>}</div>
         </div>
         {demoPreview && <div className="mt-4 rounded-lg border border-amber-200 bg-white p-4"><p className="font-medium">Có {demoPreview.totalCount} quy cách thiếu giá; lô này tạo {demoPreview.count} quy cách · quy tắc {demoPreview.ruleVersion}</p>
           {demoPreview.count === 0 ? <p className="mt-2 text-sm text-gray-600">Hiện không có quy cách thiếu giá phù hợp để bổ sung.</p> : <><ul className="mt-3 max-h-56 space-y-2 overflow-auto text-sm">{demoPreview.items.slice(0, 20).map(item => <li key={item.variantId} className="flex flex-wrap justify-between gap-2"><span>Quy cách #{item.variantId} · gói {item.quantity} {item.unit}</span><span className="font-semibold">{formatVnd(item.amount)} · {item.method === "fallback_fixture" ? "mức fixture" : `tham khảo ${item.referencePriceIds.length} giá cùng nhóm`}</span></li>)}</ul>{demoPreview.count > 20 && <p className="mt-2 text-xs text-gray-500">Đang hiển thị 20 dòng đầu.</p>}</>}
-          <p className="mt-3 text-xs text-gray-600">Giá giả lập để trải nghiệm, chưa phải giá bán chính thức. Mỗi lần chỉ tạo tối đa 100 giá; xem trước lại để tiếp tục lô còn lại.</p>
+          <p className="mt-3 text-xs text-gray-600">Mỗi lần chỉ bổ sung tối đa 100 mức giá; xem trước lại để tiếp tục lô còn lại.</p>
           {demoPreview.remainingCount > 0 && <p className="mt-2 text-sm text-amber-900">Sau lô này còn {demoPreview.remainingCount} quy cách; hãy xem trước lại để tạo lô tiếp theo.</p>}
-          <Button className="mt-3" disabled={!online || demoBusy || demoPreview.count === 0} onClick={() => void applyDemoPrices()}>Tạo {demoPreview.count} giá demo</Button>
+          <Button className="mt-3" disabled={!online || demoBusy || demoPreview.count === 0} onClick={() => void applyDemoPrices()}>Bổ sung {demoPreview.count} mức giá</Button>
         </div>}
       </Card>}
 
@@ -246,12 +257,12 @@ export function StaffPriceManagement() {
                   const contents = formatPackageContents(price.packageQuantity, price.unit);
                   const minimum = price.minimumQuantity > 1 ? formatMinimumPackageQuantity(price.minimumQuantity, price.packageName, price.packageQuantity, price.unit) : null;
                   return <article key={price.priceId} className="rounded-md border border-gray-200 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="flex items-center gap-2 text-sm font-medium text-gray-600">{price.isDemo ? <DemoPriceLabel/> : priceTypeLabel(price.priceType)}</p><h3 className="mt-1 break-words text-base font-semibold">{price.packageName}</h3><p className="mt-1 text-sm text-gray-600">{contents ? `Chứa ${contents}` : "Số lượng trong bao bì chưa rõ"}{minimum ? ` · ${minimum}` : ""}</p>{price.isDemo && <p className="mt-1 text-sm text-amber-800">Giá giả lập, chưa phải giá bán chính thức.</p>}</div><Badge color={price.status === "verified" ? "success" : price.status === "unreadable" ? "failure" : "warning"}>{verificationLabel(price.status)}</Badge></div>
+                    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="flex items-center gap-2 text-sm font-medium text-gray-600">{priceTypeLabel(price.priceType)}</p><h3 className="mt-1 break-words text-base font-semibold">{price.packageName}</h3><p className="mt-1 text-sm text-gray-600">{contents ? `Chứa ${contents}` : "Số lượng trong bao bì chưa rõ"}{minimum ? ` · ${minimum}` : ""}</p></div><Badge color={price.status === "verified" ? "success" : price.status === "unreadable" ? "failure" : "warning"}>{verificationLabel(price.status)}</Badge></div>
                     <p className="mt-3 text-2xl font-semibold tabular-nums">{formatVnd(price.price)} <span className="text-sm font-normal text-gray-500">/ {price.packageName || "đơn vị bán chưa xác định"}</span></p>
                     <p className="mt-1 text-xs text-gray-500">Hiệu lực: {formatDate(price.validFrom)} – {formatDate(price.validTo)} · Nhà cung cấp: {price.supplier}</p>
                     <p className="mt-1 text-xs text-gray-500">Phiên bản {price.version}{price.sourcePages.length ? ` · Nguồn: trang ${price.sourcePages.join(", ")}` : " · Chưa gắn trang nguồn"}</p>
                     {editingPriceId === price.priceId ? <div className="mt-4 rounded-md bg-gray-50 p-3"><Label htmlFor={`price-amount-${price.priceId}`}>Giá mới VND</Label><TextInput id={`price-amount-${price.priceId}`} className="mt-1" inputMode="decimal" value={amountDraft} onChange={event => setAmountDraft(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void savePrice(price); } if (event.key === "Escape") setEditingPriceId(null); }}/><p className="mt-2 text-xs text-gray-500">Giá hiện tại {formatVnd(price.price)} · sẽ lưu với phiên bản {price.version}</p><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" disabled={saving || !canEditPrice} onClick={() => void savePrice(price)}><Save size={14} className="mr-1"/>{saving ? "Đang lưu…" : "Lưu giá"}</Button><Button size="sm" color="light" disabled={saving} onClick={() => { setEditingPriceId(null); setSaveError(""); }}><X size={14} className="mr-1"/>Hủy</Button></div></div>
-                      : <div className="mt-3">{canEditPrice && !price.isDemo ? <Button size="sm" color="light" onClick={() => { setEditingPriceId(price.priceId); setAmountDraft(String(price.price)); setSaveError(""); setSaveMessage(""); }}><Save size={14} className="mr-1"/>Sửa {priceTypeLabel(price.priceType).toLowerCase()}</Button> : <p className="text-xs text-gray-500">{price.isDemo ? "Giá demo chỉ để thử nghiệm; nhập giá bán chính thức qua cập nhật catalog." : stale || !online ? "Chỉ xem khi dữ liệu chưa đồng bộ hoặc đang ngoại tuyến." : role === "viewer" ? "Tài khoản chỉ có quyền xem." : "Chưa xác minh được quyền sửa."}</p>}</div>}
+                      : <div className="mt-3">{canEditPrice ? <Button size="sm" color="light" onClick={() => { setEditingPriceId(price.priceId); setAmountDraft(String(price.price)); setSaveError(""); setSaveMessage(""); }}><Save size={14} className="mr-1"/>Sửa {priceTypeLabel(price.priceType).toLowerCase()}</Button> : <p className="text-xs text-gray-500">{stale || !online ? "Chỉ xem khi dữ liệu chưa đồng bộ hoặc đang ngoại tuyến." : role === "viewer" ? "Tài khoản chỉ có quyền xem." : "Chưa xác minh được quyền sửa."}</p>}</div>}
                   </article>;
                 })}</div>}
               <div className="flex items-center gap-2 border-t border-gray-200 pt-3 text-xs text-gray-500"><Check size={14}/>Giá hiển thị lấy nguyên từ SQL; không quy đổi hoặc tính lại.</div>

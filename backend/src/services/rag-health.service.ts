@@ -57,7 +57,7 @@ export async function healthRag(client: SupabaseClient) {
         const [vector] = await embedTexts(["kiểm tra kết nối embedding tiếng Việt"]);
         if (!vector) throw new Error("Embedding không trả vector.");
         const fingerprint = createHash("sha256")
-          .update(`${providerName()}:${model}:${vector.map((value) => value.toFixed(5)).join(",")}`)
+          .update(`${providerName("embedding")}:${model}:${vector.map((value) => value.toFixed(5)).join(",")}`)
           .digest("hex").slice(0, 16);
         return { ok: true, detail: "Embedding hoạt động.", model, dimensions: vector.length, fingerprint };
       } catch { return failure(); }
